@@ -1,15 +1,17 @@
 {
-  "name": "ms",
-  "displayName": "MONOSCRIPT",
-  "description": "MONOSCRIPT Support",
+  "name": "monoscript-language-support",
+  "displayName": "MONOSCRIPT Language Support",
+  "description": "Provides basic language support for MONOSCRIPT, including custom indentation.",
   "version": "0.0.1",
+  "publisher": "MONOPTICAL",
   "engines": {
     "vscode": "^1.99.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Snippets"
   ],
-
+  
   "iconThemes": [
   {
     "id": "ms-icons",
