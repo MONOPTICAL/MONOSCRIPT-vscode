@@ -1,0 +1,10 @@
+{
+    "iconDefinitions": {
+      "ms-file": {
+        "iconPath": "./images/logo.svg"
+      }
+    },
+    "fileExtensions": {
+      "ms": "ms-file"
+    }
+}

@@ -1,0 +1,109 @@
+{
+    "MONOSCRIPT Function": {
+        "prefix": "msfunc", 
+        "body": [
+            "[${1:i32}]${2:functionName}(${3:arguments}) ${4:/* @decorators */}",
+            "|   ${0:return 0}"
+        ],
+        "description": "Define a MONOSCRIPT function"
+    },
+    "Main Function": {
+        "prefix": "main",
+        "body": [
+            "[i32]main()",
+            "|   $0",
+            "|   return 0"
+        ],
+        "description": "Main function template"
+    },
+    "Strict Function": {
+        "prefix": "sfunc",
+        "body": [
+            "[${1:void}]${2:functionName}(${3:arguments}) @strict",
+            "|   $0"
+        ],
+        "description": "Define a strict MONOSCRIPT function"
+    },
+    "Pure Function": {
+        "prefix": "pfunc",
+        "body": [
+            "[${1:void}]${2:functionName}(${3:arguments}) @pure",
+            "|   $0"
+        ],
+        "description": "Define a strict MONOSCRIPT function"
+    },
+    "Entry Function": {
+        "prefix": "efunc",
+        "body": [
+            "[${1:void}]${2:functionName}(${3:arguments}) @entry",
+            "|   $0"
+        ],
+        "description": "Define a strict MONOSCRIPT function"
+    },
+    "Pure Strict Function": {
+        "prefix": "psfunc",
+        "body": [
+            "[${1:void}]${2:functionName}(${3:arguments}) @strict @pure",
+            "|   $0"
+        ],
+        "description": "Define a pure and strict MONOSCRIPT function"
+    },
+    "Constant Declaration": {
+        "prefix": "const",
+        "body": [
+            "const ${1:string} ${2:variableName} = ${3:value}"
+        ],
+        "description": "Declare a constant variable"
+    },
+    "If Statement": {
+        "prefix": "if",
+        "body": [
+            "if (${1:condition})",
+            "|   $0"
+        ],
+        "description": "If statement"
+    },
+    "If-Else Statement": {
+        "prefix": "ifelse",
+        "body": [
+            "if (${1:condition})",
+            "|   $2",
+            "else",
+            "|   $0"
+        ],
+        "description": "If-else statement"
+    },
+    "If-Else If-Else Statement": {
+        "prefix": "ifelseif",
+        "body": [
+            "if (${1:condition1})",
+            "|   $2",
+            "else if (${3:condition2})",
+            "|   $4",
+            "else",
+            "|   $0"
+        ],
+        "description": "If-else if-else statement"
+    },
+    "Return Statement": {
+        "prefix": "return",
+        "body": [
+            "return $0"
+        ],
+        "description": "Return statement"
+    },
+    "Echo Statement": {
+        "prefix": "echo",
+        "body": [
+            "echo(${0:value})"
+        ],
+        "description": "Echo statement"
+    },
+    "MONOSCRIPT Block": {
+        "prefix": "pipeblock",
+        "body": [
+            "|   $0"
+        ],
+        "description": "Insert a MONOSCRIPT indented block"
+    }
+}

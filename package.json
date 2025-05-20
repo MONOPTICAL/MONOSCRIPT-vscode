@@ -1,0 +1,80 @@
+{
+  "name": "ms",
+  "displayName": "MONOSCRIPT",
+  "description": "MONOSCRIPT Support",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+
+  "iconThemes": [
+  {
+    "id": "ms-icons",
+    "label": "MONOSCRIPT Icons",
+    "path": "./ms-icon-theme.json"
+  }
+  ],
+
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.99.0", 
+    "@types/node": "latest",
+    "typescript": "^5.0.0",
+    "eslint": "^8.0.0", 
+    "@typescript-eslint/parser": "^5.0.0", 
+    "@typescript-eslint/eslint-plugin": "^5.0.0" 
+  },
+
+
+  "main" : "./out/extension.js",
+  
+  "contributes": {
+    "commands": [
+      {
+        "command": "ms.customEnter",
+        "title": "MONOSCRIPT Custom Enter"
+      },
+      {
+        "command": "ms.customBackspace",
+        "title": "MONOSCRIPT Custom Backspace"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "ms.customEnter",
+        "key": "enter",
+        "when": "editorTextFocus && editorLangId == ms && !editorReadOnly"
+      },
+      {
+        "command": "ms.customBackspace",
+        "key": "backspace",
+        "when": "editorTextFocus && editorLangId == ms && !editorReadOnly && !suggestWidgetVisible && !renameInputVisible && !inSnippetMode && !quickFixWidgetVisible"
+      }
+    ],
+    "languages": [{
+      "id": "ms",
+      "aliases": ["MONOSCRIPT", "ms"],
+      "extensions": [".ms"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "ms",
+      "scopeName": "source.ms",
+      "path": "./syntaxes/ms.tmLanguage.json"
+    }],
+    "snippets": [
+      {
+        "language": "ms",
+        "path": "./syntaxes/snippets.json"
+      }
+    ]
+  }
+}

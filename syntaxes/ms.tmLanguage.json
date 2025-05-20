@@ -1,0 +1,271 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "MONOSCRIPT",
+    "patterns": [
+        {
+            "include": "#keywords"
+        },
+        {
+            "include": "#types"
+        },
+        {
+            "include": "#strings"
+        },
+        {
+            "include": "#numbers"
+        },
+        {
+            "include": "#comments"
+        },
+        {
+            "include": "#labels"
+        },
+        {
+            "include": "#functions"
+        },
+        {
+            "include": "#operators"
+        },
+        {
+            "include": "#constants"
+        },
+        {
+            "include": "#variables"
+        },
+        {
+            "include": "#structures"
+        },
+        {
+            "include": "#lambdas"
+        },
+        {
+            "include": "#pipe_chains"
+        }
+    ],
+    "repository": {
+        "keywords": {
+			"patterns": [{
+				"name": "keyword.control.ms",
+				"match": "\\b(if|else|for|while|return|break|continue|in|and|or|not|is|this|defined)\\b"
+            },
+            {
+                "name": "keyword.other.ms",
+                "match": "\\b(use|const|final|public|private|define)\\b"
+            },
+            {
+                "name": "keyword.block.ms",
+                "match": "^\\|\\s+"
+            }]
+        },
+        "types": {
+            "patterns": [{
+                "name": "storage.type.ms",
+                "match": "\\b(i1|i8|i16|i32|i64|string|void|float|struct|class|bool)\\b"
+            },
+            {
+                "name": "storage.type.generic.ms",
+                "match": "\\b(array|map)<([^>]*,)*[^>]*>"
+            }]
+        },
+        "strings": {
+            "name": "string.quoted.double.ms",
+            "begin": "\"",
+            "end": "\"",
+            "patterns": [
+                {
+                    "name": "constant.character.escape.ms",
+                    "match": "\\\\."
+                }
+            ]
+        },
+        "numbers": {
+            "patterns": [{
+                "name": "constant.numeric.ms",
+                "match": "\\b([0-9]+(\\.([0-9]+)?)?|\\.([0-9]+))\\b"
+            }]
+        },
+        "comments": {
+            "patterns": [{
+                "name": "comment.line.double-slash.ms",
+                "begin": "//",
+                "end": "$"
+            }]
+        },
+        "labels": { 
+            "patterns": [{
+                "name": "entity.name.tag.ms", 
+                "match": "@\\w+"
+            }]
+        },
+        "functions": {
+            "patterns": [{
+                "name": "meta.function.ms",
+                "begin": "\\[(\\w+)\\](\\w+)\\s*\\(",
+                "beginCaptures": {
+                    "1": { "name": "storage.type.return.ms" },
+                    "2": { "name": "entity.name.function.ms" }
+                },
+                "end": "\\)",
+                "patterns": [{
+                    "name": "variable.parameter.ms",
+                    "match": "(\\w+):\\s*(\\w+)",
+                    "captures": {
+                        "1": { "name": "storage.type.parameter.ms" },
+                        "2": { "name": "variable.parameter.name.ms" }
+                    }
+                }]
+            }]
+        },
+        "operators": {
+            "patterns": [{
+                "name": "keyword.operator.assignment.ms",
+                "match": "(=|\\^=)"
+            },
+            {
+                "name": "keyword.operator.arithmetic.ms",
+                "match": "(\\+|\\-|\\*|\\/|%)"
+            },
+            {
+                "name": "keyword.operator.comparison.ms",
+                "match": "(==|!=|>|<|>=|<=)"
+            },
+            {
+                "name": "keyword.operator.logical.ms",
+                "match": "(\\!)"
+            },
+            {
+                "name": "keyword.operator.pipe.ms",
+                "match": "\\|>"
+            },
+            {
+                "name": "keyword.operator.nullsafety.ms",
+                "match": "\\?(?=\\w)"
+            }]
+        },
+        "constants": {
+            "patterns": [{
+                "name": "constant.language.ms",
+                "match": "\\b(true|false|null|none)\\b"
+            }]
+        },
+        "variables": {
+            "patterns": [{
+                "name": "meta.variable.static.ms",
+                "match": "(const\\s+)?(\\w+)\\s+(\\w+)\\s*=",
+                "captures": {
+                    "1": { "name": "storage.modifier.ms" },
+                    "2": { "name": "storage.type.ms" },
+                    "3": { "name": "variable.other.ms" }
+                }
+            },
+            {
+                "name": "meta.variable.dynamic.ms",
+                "match": "(final\\s+)?(\\w+)\\s+\\^=",
+                "captures": {
+                    "1": { "name": "storage.modifier.ms" },
+                    "2": { "name": "variable.other.ms" }
+                }
+            }]
+        },
+        "structures": {
+            "patterns": [{
+                "name": "meta.struct.declaration.ms",
+                "begin": "\\[struct\\](\\w+)",
+                "beginCaptures": {
+                    "1": { "name": "entity.name.type.struct.ms" }
+                },
+                "end": "(?=\\[struct\\]|\\[void\\]|\\[\\w+\\]|$)",
+                "patterns": [
+                    { "include": "#functions" },
+                    { "include": "#variables" },
+                    { "include": "#keywords" }
+                ]
+            },
+            {
+                "name": "meta.array.literal.ms",
+                "begin": "\\[",
+                "end": "\\]",
+                "patterns": [
+                    { "include": "#numbers" },
+                    { "include": "#strings" },
+                    { "include": "#constants" }
+                ]
+            },
+            {
+                "name": "meta.map.literal.ms",
+                "begin": "\\{",
+                "end": "\\}",
+                "patterns": [
+                    { "include": "#strings" },
+                    { "include": "#numbers" },
+                    { "include": "#constants" }
+                ]
+            }]
+        },
+        "lambdas": {
+            "patterns": [{
+                "name": "meta.lambda.expression.ms",
+                "begin": "(\\[\\w+\\])\\s*\\(([^\\)]*)\\)\\s*->",
+                "beginCaptures": {
+                    "1": { "name": "storage.type.ms" },
+                    "2": { "name": "variable.parameter.ms" }
+                },
+                "end": "(?=[,\\)\\]\\}]|$)",
+                "patterns": [
+                    { "include": "#expressions" }
+                ]
+            },
+            {
+                "name": "meta.lambda.block.ms",
+                "begin": "(\\[\\w+\\])\\s*\\(([^\\)]*)\\)\\s*:",
+                "beginCaptures": {
+                    "1": { "name": "storage.type.ms" },
+                    "2": { "name": "variable.parameter.ms" }
+                },
+                "end": "(?=\\[|$)",
+                "patterns": [
+                    { "include": "#keywords" },
+                    { "include": "#expressions" }
+                ]
+            }]
+        },
+        "pipe_chains": {
+            "patterns": [{
+                "name": "meta.pipe.chain.ms",
+                "begin": "\\|>",
+                "end": "(?=$|^(?!\\s*\\|>))",
+                "patterns": [
+                    { "include": "#expressions" },
+                    { "include": "#functions" },
+                    { "include": "#lambdas" }
+                ]
+            },
+            {
+                "name": "meta.import.ms",
+                "begin": "\\buse\\b",
+                "end": "(?=$|^(?!\\|>))",
+                "patterns": [
+                    {
+                        "match": "\\|>\\s*(\\w+)(?:\\s*->\\s*(\\w+)\\s*:\\s*(\\w+))?",
+                        "captures": {
+                            "1": { "name": "entity.name.namespace.ms" },
+                            "2": { "name": "entity.name.function.ms" },
+                            "3": { "name": "entity.name.function.ms" }
+                        }
+                    }
+                ]
+            }]
+        },
+        "expressions": {
+            "patterns": [
+                { "include": "#strings" },
+                { "include": "#numbers" },
+                { "include": "#constants" },
+                { "include": "#operators" },
+                { "include": "#structures" },
+                { "include": "#variables" }
+            ]
+        }
+    },
+    "scopeName": "source.ms"
+}
