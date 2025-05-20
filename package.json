@@ -4,6 +4,7 @@
   "description": "Provides basic language support for MONOSCRIPT, including custom indentation.",
   "version": "0.0.1",
   "publisher": "MONOPTICAL",
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.99.0"
   },
