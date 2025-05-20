@@ -1,6 +1,6 @@
 {
   "name": "monoscript-language-support",
-  "displayName": "MONOSCRIPT Language Support",
+  "displayName": "MONOSCRIPT(MONOPTICAL) Language Support",
   "description": "Provides basic language support for MONOSCRIPT, including custom indentation.",
   "version": "0.0.1",
   "publisher": "MONOPTICAL",
@@ -11,7 +11,12 @@
     "Programming Languages",
     "Snippets"
   ],
-  
+
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MONOPTICAL/MONOSCRIPT-vscode"
+  },
+
   "iconThemes": [
   {
     "id": "ms-icons",
