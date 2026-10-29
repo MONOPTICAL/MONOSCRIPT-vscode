@@ -2,3 +2,11 @@
 .vscode-test/**
 .gitignore
 vsc-extension-quickstart.md
+src/**
+node_modules/**
+tsconfig.json
+**/*.map
+**/*.vsix
+syntaxes/build-grammar.js
+example.ms
+.eslintrc.json

@@ -1,8 +1,8 @@
 {
     "MONOSCRIPT Function": {
-        "prefix": "msfunc", 
+        "prefix": "msfunc",
         "body": [
-            "[${1:i32}]${2:functionName}(${3:arguments}) ${4:/* @decorators */}",
+            "[${1:i32}]${2:functionName}(${3:i32}: ${4:arg})",
             "|   ${0:return 0}"
         ],
         "description": "Define a MONOSCRIPT function"
@@ -10,7 +10,7 @@
     "Main Function": {
         "prefix": "main",
         "body": [
-            "[i32]main()",
+            "[i32]main() @entry",
             "|   $0",
             "|   return 0"
         ],
@@ -19,7 +19,7 @@
     "Strict Function": {
         "prefix": "sfunc",
         "body": [
-            "[${1:void}]${2:functionName}(${3:arguments}) @strict",
+            "[${1:void}]${2:functionName}(${3}) @strict",
             "|   $0"
         ],
         "description": "Define a strict MONOSCRIPT function"
@@ -27,33 +27,95 @@
     "Pure Function": {
         "prefix": "pfunc",
         "body": [
-            "[${1:void}]${2:functionName}(${3:arguments}) @pure",
+            "[${1:void}]${2:functionName}(${3}) @pure",
             "|   $0"
         ],
-        "description": "Define a strict MONOSCRIPT function"
+        "description": "Define a pure MONOSCRIPT function"
     },
     "Entry Function": {
         "prefix": "efunc",
         "body": [
-            "[${1:void}]${2:functionName}(${3:arguments}) @entry",
+            "[${1:void}]${2:functionName}(${3}) @entry",
             "|   $0"
         ],
-        "description": "Define a strict MONOSCRIPT function"
+        "description": "Define an entry-point MONOSCRIPT function"
     },
     "Pure Strict Function": {
         "prefix": "psfunc",
         "body": [
-            "[${1:void}]${2:functionName}(${3:arguments}) @strict @pure",
+            "[${1:void}]${2:functionName}(${3}) @strict @pure",
             "|   $0"
         ],
         "description": "Define a pure and strict MONOSCRIPT function"
     },
+    "Declaration Only": {
+        "prefix": "decl",
+        "body": [
+            "[${1:void}]${2:functionName}(${3}) @decl$0"
+        ],
+        "description": "Function declaration without a body"
+    },
+    "Struct": {
+        "prefix": "struct",
+        "body": [
+            "[struct]${1:Name}",
+            "|   ${2:i32} ${3:field} = ${4:0}",
+            "|",
+            "|   [void]__init__(${5:i32}: ${6:value})",
+            "|   |   ${3:field} = ${6:value}$0"
+        ],
+        "description": "Struct with a field and constructor"
+    },
+    "Constructor": {
+        "prefix": "init",
+        "body": [
+            "[void]__init__(${1})",
+            "|   $0"
+        ],
+        "description": "Struct constructor (__init__)"
+    },
+    "Method Outside Struct": {
+        "prefix": "method",
+        "body": [
+            "[${1:void}]${2:Struct}::${3:method}(${4})",
+            "|   $0"
+        ],
+        "description": "Function associated with a struct (Struct::method)"
+    },
     "Constant Declaration": {
         "prefix": "const",
         "body": [
-            "const ${1:string} ${2:variableName} = ${3:value}"
+            "const ${1:i32} ${2:NAME} = ${3:value}"
         ],
-        "description": "Declare a constant variable"
+        "description": "Declare a constant with an explicit type"
+    },
+    "Final Declaration": {
+        "prefix": "final",
+        "body": [
+            "final ${1:name} ^= ${2:value}"
+        ],
+        "description": "Declare a constant with an inferred type"
+    },
+    "Inferred Variable": {
+        "prefix": "var",
+        "body": [
+            "${1:name} ^= ${2:value}"
+        ],
+        "description": "Variable with an inferred type"
+    },
+    "Array Variable": {
+        "prefix": "arr",
+        "body": [
+            "array<${1:i32}> ${2:name} = [${3}]"
+        ],
+        "description": "Typed array variable"
+    },
+    "Map Variable": {
+        "prefix": "mapv",
+        "body": [
+            "map<${1:string}, ${2:string}> ${3:name} = {${4}}"
+        ],
+        "description": "Typed map variable"
     },
     "If Statement": {
         "prefix": "if",
@@ -85,6 +147,59 @@
         ],
         "description": "If-else if-else statement"
     },
+    "For Loop": {
+        "prefix": "for",
+        "body": [
+            "for ${1:i} in range(${2:array})",
+            "|   $0"
+        ],
+        "description": "For loop over array indices"
+    },
+    "While Loop": {
+        "prefix": "while",
+        "body": [
+            "while (${1:condition})",
+            "|   $0"
+        ],
+        "description": "While loop"
+    },
+    "Lambda": {
+        "prefix": "lambda",
+        "body": [
+            "${1:name} ^= [${2:i32}](${3:i32}: ${4:x}) -> ${0:x}"
+        ],
+        "description": "One-line lambda"
+    },
+    "Block Lambda": {
+        "prefix": "lambdab",
+        "body": [
+            "${1:name} ^= [${2:i32}](${3:i32}: ${4:x}) :",
+            "|   ${0:return x}"
+        ],
+        "description": "Multi-line lambda"
+    },
+    "Use Modules": {
+        "prefix": "use",
+        "body": [
+            "use",
+            "|> ${1:module}$0"
+        ],
+        "description": "Import modules"
+    },
+    "Use Function With Alias": {
+        "prefix": "usefn",
+        "body": [
+            "|> ${1:module} -> ${2:function} : ${3:alias}"
+        ],
+        "description": "Import a function from a module under an alias"
+    },
+    "Pipe": {
+        "prefix": "pipe",
+        "body": [
+            "|> ${1:map}(${2:x}, [${3:i32}](${4:i32}: ${5:a}) -> ${0:a})"
+        ],
+        "description": "Pipe step with a lambda"
+    },
     "Return Statement": {
         "prefix": "return",
         "body": [
@@ -98,6 +213,13 @@
             "echo(${0:value})"
         ],
         "description": "Echo statement"
+    },
+    "Echo Integer": {
+        "prefix": "echoi",
+        "body": [
+            "echo(toString_int(${0:value}))"
+        ],
+        "description": "Print an i32 value"
     },
     "MONOSCRIPT Block": {
         "prefix": "pipeblock",

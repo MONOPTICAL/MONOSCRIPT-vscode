@@ -1,66 +1,49 @@
 {
   "name": "monoscript-language-support",
   "displayName": "MONOSCRIPT(MONOPTICAL) Language Support",
-  "description": "Provides basic language support for MONOSCRIPT, including custom indentation.",
-  "version": "0.0.2",
+  "description": "MONOSCRIPT language support: syntax highlighting, smart `|` indentation, outline, completion, hover, go to definition, compiler diagnostics and run/compile commands.",
+  "version": "0.1.0",
   "publisher": "MONOPTICAL",
+  "license": "SEE LICENSE IN LICENSE",
   "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.99.0"
   },
   "categories": [
     "Programming Languages",
-    "Snippets"
+    "Snippets",
+    "Formatters"
+  ],
+  "keywords": [
+    "monoscript",
+    "monoptical",
+    "ms"
   ],
   "repository": {
     "type": "git",
     "url": "https://github.com/MONOPTICAL/MONOSCRIPT-vscode"
   },
-  "iconThemes": [
-    {
-      "id": "ms-icons",
-      "label": "MONOSCRIPT Icons",
-      "path": "./ms-icon-theme.json"
-    }
-  ],
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run grammar && npm run compile",
+    "grammar": "node syntaxes/build-grammar.js",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "package": "npx @vscode/vsce package"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "@types/vscode": "^1.99.0",
-    "@types/node": "latest",
-    "typescript": "^5.0.0",
-    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
     "@typescript-eslint/parser": "^5.0.0",
-    "@typescript-eslint/eslint-plugin": "^5.0.0"
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
   },
   "main": "./out/extension.js",
+  "activationEvents": [
+    "workspaceContains:**/*.ms"
+  ],
   "contributes": {
-    "commands": [
-      {
-        "command": "ms.customEnter",
-        "title": "MONOSCRIPT Custom Enter"
-      },
-      {
-        "command": "ms.customBackspace",
-        "title": "MONOSCRIPT Custom Backspace"
-      }
-    ],
-    "keybindings": [
-      {
-        "command": "ms.customEnter",
-        "key": "enter",
-        "when": "editorTextFocus && editorLangId == ms && !editorReadOnly"
-      },
-      {
-        "command": "ms.customBackspace",
-        "key": "backspace",
-        "when": "editorTextFocus && editorLangId == ms && !editorReadOnly && !suggestWidgetVisible && !renameInputVisible && !inSnippetMode && !quickFixWidgetVisible"
-      }
-    ],
     "languages": [
       {
         "id": "ms",
@@ -71,7 +54,11 @@
         "extensions": [
           ".ms"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./images/logo.svg",
+          "dark": "./images/logo.svg"
+        }
       }
     ],
     "grammars": [
@@ -81,10 +68,247 @@
         "path": "./syntaxes/ms.tmLanguage.json"
       }
     ],
-    "snippets": [
+    "iconThemes": [
       {
-        "language": "ms",
-        "path": "./syntaxes/snippets.json"
+        "id": "ms-icons",
+        "label": "MONOSCRIPT Icons",
+        "path": "./ms.icon-theme.json"
+      }
+    ],
+    "configuration": {
+      "title": "MONOSCRIPT",
+      "properties": {
+        "monoscript.compilerPath": {
+          "type": "string",
+          "default": "ms",
+          "markdownDescription": "Путь к компилятору MONOSCRIPT (`ms`). Используется для проверки ошибок, запуска и компиляции."
+        },
+        "monoscript.diagnostics.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Проверять .ms файлы компилятором при открытии и сохранении."
+        },
+        "monoscript.diagnostics.remapLines": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Компилятор считает строки без учёта пустых строк и строк-комментариев. Включено — номера строк из ошибок пересчитываются в реальные. Выключите, если в компиляторе это исправят."
+        },
+        "monoscript.saveBeforeRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Сохранять файл перед запуском и компиляцией."
+        },
+        "monoscript.indentUnit": {
+          "type": "string",
+          "default": "|   ",
+          "pattern": "^\\| *$",
+          "markdownDescription": "Один уровень отступа: `|` и пробелы. По умолчанию `\"|   \"`."
+        },
+        "monoscript.smartIndent": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Умные `Enter` / `Backspace`: автоматически продолжать и открывать блоки `|`."
+        },
+        "monoscript.blockGuides": {
+          "type": "string",
+          "enum": [
+            "rainbow",
+            "dim",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Раскрашивать `|` по уровню вложенности",
+            "Приглушать `|`",
+            "Без подсветки"
+          ],
+          "default": "rainbow",
+          "description": "Подсветка вертикальных черт отступа."
+        }
+      }
+    },
+    "configurationDefaults": {
+      "[ms]": {
+        "editor.insertSpaces": true,
+        "editor.tabSize": 4,
+        "editor.detectIndentation": false,
+        "editor.guides.indentation": false
+      }
+    },
+    "commands": [
+      {
+        "command": "monoscript.run",
+        "title": "Run File",
+        "category": "MONOSCRIPT",
+        "icon": "$(play)"
+      },
+      {
+        "command": "monoscript.compile",
+        "title": "Compile to Executable",
+        "category": "MONOSCRIPT",
+        "icon": "$(package)"
+      },
+      {
+        "command": "monoscript.check",
+        "title": "Check File",
+        "category": "MONOSCRIPT"
+      },
+      {
+        "command": "monoscript.showTokens",
+        "title": "Show Tokens",
+        "category": "MONOSCRIPT"
+      },
+      {
+        "command": "monoscript.showAST",
+        "title": "Show AST",
+        "category": "MONOSCRIPT"
+      },
+      {
+        "command": "monoscript.indentLines",
+        "title": "Indent Lines (add |)",
+        "category": "MONOSCRIPT"
+      },
+      {
+        "command": "monoscript.outdentLines",
+        "title": "Outdent Lines (remove |)",
+        "category": "MONOSCRIPT"
+      },
+      {
+        "command": "ms.customEnter",
+        "title": "Smart Enter",
+        "category": "MONOSCRIPT"
+      },
+      {
+        "command": "ms.customBackspace",
+        "title": "Smart Backspace",
+        "category": "MONOSCRIPT"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "monoscript.run",
+          "when": "resourceLangId == ms",
+          "group": "navigation@0"
+        },
+        {
+          "command": "monoscript.compile",
+          "when": "resourceLangId == ms",
+          "group": "navigation@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "monoscript.run",
+          "when": "editorLangId == ms",
+          "group": "monoscript@1"
+        },
+        {
+          "command": "monoscript.compile",
+          "when": "editorLangId == ms",
+          "group": "monoscript@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "monoscript.run",
+          "when": "editorLangId == ms"
+        },
+        {
+          "command": "monoscript.compile",
+          "when": "editorLangId == ms"
+        },
+        {
+          "command": "monoscript.check",
+          "when": "editorLangId == ms"
+        },
+        {
+          "command": "monoscript.showTokens",
+          "when": "editorLangId == ms"
+        },
+        {
+          "command": "monoscript.showAST",
+          "when": "editorLangId == ms"
+        },
+        {
+          "command": "monoscript.indentLines",
+          "when": "editorLangId == ms"
+        },
+        {
+          "command": "monoscript.outdentLines",
+          "when": "editorLangId == ms"
+        },
+        {
+          "command": "ms.customEnter",
+          "when": "false"
+        },
+        {
+          "command": "ms.customBackspace",
+          "when": "false"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "ms.customEnter",
+        "key": "enter",
+        "when": "editorTextFocus && editorLangId == ms && !editorReadOnly && config.monoscript.smartIndent && !suggestWidgetVisible && !renameInputVisible && !quickFixWidgetVisible && !inSnippetMode"
+      },
+      {
+        "command": "ms.customBackspace",
+        "key": "backspace",
+        "when": "editorTextFocus && editorLangId == ms && !editorReadOnly && config.monoscript.smartIndent && !suggestWidgetVisible && !renameInputVisible && !inSnippetMode && !quickFixWidgetVisible"
+      },
+      {
+        "command": "monoscript.indentLines",
+        "key": "ctrl+]",
+        "mac": "cmd+]",
+        "when": "editorTextFocus && editorLangId == ms && !editorReadOnly"
+      },
+      {
+        "command": "monoscript.outdentLines",
+        "key": "ctrl+[",
+        "mac": "cmd+[",
+        "when": "editorTextFocus && editorLangId == ms && !editorReadOnly"
+      },
+      {
+        "command": "monoscript.outdentLines",
+        "key": "shift+tab",
+        "when": "editorTextFocus && editorLangId == ms && !editorReadOnly && !inSnippetMode && !suggestWidgetVisible && !inlineSuggestionVisible"
+      },
+      {
+        "command": "monoscript.run",
+        "key": "ctrl+f5",
+        "mac": "cmd+f5",
+        "when": "editorLangId == ms"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "monoscript",
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "run",
+              "compile",
+              "check",
+              "tokens",
+              "ast"
+            ],
+            "description": "Что сделать с файлом."
+          },
+          "file": {
+            "type": "string",
+            "description": "Путь к .ms файлу (по умолчанию — активный редактор)."
+          },
+          "output": {
+            "type": "string",
+            "description": "Имя исполняемого файла для action = compile."
+          }
+        }
       }
     ]
   }
