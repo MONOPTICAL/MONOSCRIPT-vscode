@@ -1,7 +1,7 @@
 {
     "comments": {
         "lineComment": "//",
-        "blockComment": [ "/*", "*/" ] // В самом языке пока ещё хуёво они сделаны
+        "blockComment": [ "/*", "*/" ]
     },
     "brackets": [
         ["{", "}"],
@@ -18,6 +18,7 @@
         { "open": "[", "close": "]" },
         { "open": "(", "close": ")" },
         { "open": "\"", "close": "\"", "notIn": ["string", "comment"] },
+        { "open": "'", "close": "'", "notIn": ["string", "comment"] },
         { "open": "/*", "close": " */", "notIn": ["string"] }
     ],
     "autoCloseBefore": ";:.,=}])> \n\t",
@@ -26,6 +27,7 @@
         ["[", "]"],
         ["(", ")"],
         ["\"", "\""],
+        ["'", "'"],
         ["<", ">"]
     ],
     "wordPattern": "@?[A-Za-z_][A-Za-z0-9_]*|-?\\d+(?:\\.\\d+)?",

@@ -4,6 +4,60 @@ All notable changes to the "ms" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.3.0]
+
+### Added
+- Language server (`src/server`, Language Server Protocol). Completion, hover, go to definition, references, signature help, symbols, folding and formatting moved there from the extension process. Other editors can use the server through `node out/server/server.js --stdio`.
+- Diagnostics while typing, without the compiler (`ms-lint`):
+  - `|` indentation errors and empty blocks;
+  - unknown labels;
+  - unclosed strings and bad `char` literals;
+  - removed or not yet implemented syntax;
+  - calls to undeclared functions.
+- Rename (`F2`) across files, highlight of the symbol under the cursor, inlay hints with inferred types.
+- Return types of functions from other files are used for `x ^= f()`.
+- `monoscript.diagnostics.lint` and `monoscript.trace.server` settings, `MONOSCRIPT: Restart Language Server` command.
+- `npm test`: the language server is checked over the real protocol.
+- `F5` builds the project first, and the *Client + Server* launch configuration attaches the debugger to the server.
+- The language reference is built into the extension. It opens in its own panel:
+  - contents sidebar and full-text search;
+  - RU/EN switch and the `monoscript.guide.language` setting;
+  - highlighted examples with **Open in editor** and **Copy** buttons.
+- Hovers on keywords, types, labels and built-ins link to their section of the reference. `MONOSCRIPT: Search Language Reference` jumps to a section by title. The reference also has a button in the editor title bar and an entry in the context menu.
+
+### Changed
+- Compiler diagnostics run in the language server and are merged with its own checks.
+- `MONOSCRIPT: Open Language Guide` is now `Open Language Reference` and opens the panel instead of the Markdown preview.
+
+## [0.2.0]
+
+Updated for the language on the MONOSCRIPT `dev` branch.
+
+### Added
+- Methods inside structs and `self`: completion and go to definition after `self.`, hover on `self`.
+- Generic functions `[T]first<T>(array<T>: items)`: highlighting, outline, signatures, smart `Enter`.
+- `func: keep(T: x) -> i1` parameters are shown in their source form.
+- `result<T>`: type, `ok()` / `err()`, completion and hover for `r.ok`, `r.value`, `r.code`, `r.error`, the `?r` check, `_ ^= ...`.
+- Types `f64` and `char`, character literals with escapes (`'\n'`, `'\''`), `'` is auto-closed again.
+- `@overwrite` label, `final i32 x` with a later assignment.
+- Built-ins from the new std library and the compiler: `cstr`, `len`, `push`, `pop`, `has`, `del`, `copy`, `range(a, b)`, `input`, `substr`, `strfind`, `startsWith`, `count`, `split`, `toInt`, `toArray`, `joinChars`, `toString_f64`, `toString_char`, `gc_collect`.
+- Type inference for `x ^= f()`, `2.5` (`f64`), `'a'` (`char`) and loop variables of `for x in array`, `for k in map`, `for c in string`.
+- `MONOSCRIPT: Show Semantic Analysis` command and `semantic` task action (`--semantic`).
+- `monoscript.extraArgs` setting for flags like `--timings` and `--offOptimization`.
+- Language reference in English and Russian (`docs/`), with examples from the compiler tests.
+- Integer literals infer the narrowest type, as in the compiler: `x ^= 1` is `i1`, `x ^= 300` is `i16`.
+- `\f` and `\b` escapes are highlighted.
+
+### Changed
+- Run uses `ms run FILE`.
+- Snippets: `if` / `while` without parentheses, `main` without `@entry`, new `gfunc`, `funcp`, `rfunc`, `ifok`, `ignore`, `ofunc`, `finald`, `forr`, `forin`; `echoi` uses `cstr`.
+- Struct fields are reached through `self.` inside methods, not by bare name.
+- Struct constructors take no arguments: `Player()`.
+
+### Removed
+- `monoscript.diagnostics.remapLines`: the compiler now reports real line numbers.
+- `[T]Struct::method` declarations, `__init__`, `@decl`, `not` and lambdas, which the compiler no longer accepts (lambdas and `|>` pipes are planned). Snippets `decl`, `init`, `lambda`, `lambdab`, `pipe` are gone.
+
 ## [0.1.0]
 
 ### Added
@@ -21,7 +75,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - `Enter` no longer overrides accepting a suggestion from the completion widget.
 - `Enter` / `Backspace` work with multiple cursors, and with text after the cursor.
 - Snippets keep the `|` prefix when inserted inside nested blocks.
-- `'` is no longer auto-closed (MONOSCRIPT has no character literals).
+- `'` was no longer auto-closed (MONOSCRIPT had no character literals then).
 
 ## [0.0.2]
 

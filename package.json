@@ -1,8 +1,8 @@
 {
   "name": "monoscript-language-support",
   "displayName": "MONOSCRIPT(MONOPTICAL) Language Support",
-  "description": "MONOSCRIPT language support: syntax highlighting, smart `|` indentation, outline, completion, hover, go to definition, compiler diagnostics and run/compile commands.",
-  "version": "0.1.0",
+  "description": "MONOSCRIPT language support with a language server: syntax highlighting, smart | indentation, diagnostics while typing, completion, hover, go to definition, rename, inlay type hints and run/compile commands.",
+  "version": "0.3.0",
   "publisher": "MONOPTICAL",
   "license": "SEE LICENSE IN LICENSE",
   "icon": "images/icon.png",
@@ -29,9 +29,12 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
-    "package": "npx @vscode/vsce package"
+    "package": "npx --yes @vscode/vsce@3.2.1 package",
+    "test": "npm run compile && node --test test/",
+    "build": "npm run grammar && npm run compile"
   },
   "devDependencies": {
+    "@types/markdown-it": "14.1.2",
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.99.0",
     "@typescript-eslint/eslint-plugin": "^5.0.0",
@@ -41,6 +44,7 @@
   },
   "main": "./out/extension.js",
   "activationEvents": [
+    "onLanguage:ms",
     "workspaceContains:**/*.ms"
   ],
   "contributes": {
@@ -88,15 +92,23 @@
           "default": true,
           "description": "Проверять .ms файлы компилятором при открытии и сохранении."
         },
-        "monoscript.diagnostics.remapLines": {
+        "monoscript.diagnostics.lint": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Компилятор считает строки без учёта пустых строк и строк-комментариев. Включено — номера строк из ошибок пересчитываются в реальные. Выключите, если в компиляторе это исправят."
+          "markdownDescription": "Быстрые проверки языкового сервера во время набора: отступы `|`, метки, незакрытые строки, неизвестные функции. Работают без компилятора."
         },
         "monoscript.saveBeforeRun": {
           "type": "boolean",
           "default": true,
           "description": "Сохранять файл перед запуском и компиляцией."
+        },
+        "monoscript.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Дополнительные флаги компилятора для запуска и компиляции, например `[\"--timings\"]` или `[\"--offOptimization\"]`."
         },
         "monoscript.indentUnit": {
           "type": "string",
@@ -123,6 +135,31 @@
           ],
           "default": "rainbow",
           "description": "Подсветка вертикальных черт отступа."
+        },
+        "monoscript.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Журнал обмена с языковым сервером (окно Output → MONOSCRIPT Language Server)."
+        },
+        "monoscript.guide.language": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ru",
+            "en"
+          ],
+          "default": "auto",
+          "enumDescriptions": [
+            "Как язык интерфейса VS Code",
+            "Русский",
+            "English"
+          ],
+          "description": "Язык справочника по MONOSCRIPT."
         }
       }
     },
@@ -163,6 +200,11 @@
         "category": "MONOSCRIPT"
       },
       {
+        "command": "monoscript.showSemantic",
+        "title": "Show Semantic Analysis",
+        "category": "MONOSCRIPT"
+      },
+      {
         "command": "monoscript.indentLines",
         "title": "Indent Lines (add |)",
         "category": "MONOSCRIPT"
@@ -181,6 +223,23 @@
         "command": "ms.customBackspace",
         "title": "Smart Backspace",
         "category": "MONOSCRIPT"
+      },
+      {
+        "command": "monoscript.openGuide",
+        "title": "Open Language Reference",
+        "category": "MONOSCRIPT",
+        "icon": "$(book)"
+      },
+      {
+        "command": "monoscript.restartServer",
+        "title": "Restart Language Server",
+        "category": "MONOSCRIPT"
+      },
+      {
+        "command": "monoscript.searchGuide",
+        "title": "Search Language Reference",
+        "category": "MONOSCRIPT",
+        "icon": "$(search)"
       }
     ],
     "menus": {
@@ -206,6 +265,11 @@
           "command": "monoscript.compile",
           "when": "editorLangId == ms",
           "group": "monoscript@2"
+        },
+        {
+          "command": "monoscript.openGuide",
+          "when": "editorLangId == ms",
+          "group": "monoscript@9"
         }
       ],
       "commandPalette": [
@@ -230,6 +294,10 @@
           "when": "editorLangId == ms"
         },
         {
+          "command": "monoscript.showSemantic",
+          "when": "editorLangId == ms"
+        },
+        {
           "command": "monoscript.indentLines",
           "when": "editorLangId == ms"
         },
@@ -244,6 +312,13 @@
         {
           "command": "ms.customBackspace",
           "when": "false"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "monoscript.openGuide",
+          "when": "resourceLangId == ms",
+          "group": "navigation@9"
         }
       ]
     },
@@ -296,7 +371,8 @@
               "compile",
               "check",
               "tokens",
-              "ast"
+              "ast",
+              "semantic"
             ],
             "description": "Что сделать с файлом."
           },
@@ -311,5 +387,12 @@
         }
       }
     ]
+  },
+  "dependencies": {
+    "markdown-it": "14.1.0",
+    "vscode-languageclient": "9.0.1",
+    "vscode-languageserver": "9.0.1",
+    "vscode-languageserver-textdocument": "1.0.12",
+    "vscode-uri": "3.0.8"
   }
 }

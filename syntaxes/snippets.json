@@ -10,11 +10,11 @@
     "Main Function": {
         "prefix": "main",
         "body": [
-            "[i32]main() @entry",
+            "[i32]main()",
             "|   $0",
             "|   return 0"
         ],
-        "description": "Main function template"
+        "description": "Program entry point"
     },
     "Strict Function": {
         "prefix": "sfunc",
@@ -22,7 +22,7 @@
             "[${1:void}]${2:functionName}(${3}) @strict",
             "|   $0"
         ],
-        "description": "Define a strict MONOSCRIPT function"
+        "description": "Function without implicit casts"
     },
     "Pure Function": {
         "prefix": "pfunc",
@@ -30,15 +30,7 @@
             "[${1:void}]${2:functionName}(${3}) @pure",
             "|   $0"
         ],
-        "description": "Define a pure MONOSCRIPT function"
-    },
-    "Entry Function": {
-        "prefix": "efunc",
-        "body": [
-            "[${1:void}]${2:functionName}(${3}) @entry",
-            "|   $0"
-        ],
-        "description": "Define an entry-point MONOSCRIPT function"
+        "description": "Function without side effects (checked by the compiler)"
     },
     "Pure Strict Function": {
         "prefix": "psfunc",
@@ -46,14 +38,67 @@
             "[${1:void}]${2:functionName}(${3}) @strict @pure",
             "|   $0"
         ],
-        "description": "Define a pure and strict MONOSCRIPT function"
+        "description": "Pure and strict function"
     },
-    "Declaration Only": {
-        "prefix": "decl",
+    "Entry Function": {
+        "prefix": "efunc",
         "body": [
-            "[${1:void}]${2:functionName}(${3}) @decl$0"
+            "[${1:i32}]${2:start}() @entry",
+            "|   $0",
+            "|   return 0"
         ],
-        "description": "Function declaration without a body"
+        "description": "Entry point with a custom name instead of main"
+    },
+    "Overwrite Function": {
+        "prefix": "ofunc",
+        "body": [
+            "[${1:void}]${2:functionName}(${3}) @overwrite",
+            "|   $0"
+        ],
+        "description": "Replace an imported function on purpose"
+    },
+    "Generic Function": {
+        "prefix": "gfunc",
+        "body": [
+            "[${1:T}]${2:first}<${3:T}>(${4:array<T>}: ${5:items})",
+            "|   ${0:return items[0]}"
+        ],
+        "description": "Generic function, the types come from the arguments"
+    },
+    "Function Parameter": {
+        "prefix": "funcp",
+        "body": [
+            "func: ${1:keep}(${2:T}: ${3:x}) -> ${4:i1}"
+        ],
+        "description": "Parameter that takes a function by name"
+    },
+    "Result Function": {
+        "prefix": "rfunc",
+        "body": [
+            "[result<${1:i32}>]${2:functionName}(${3:string}: ${4:s})",
+            "|   if ${5:len(s) == 0}",
+            "|   |   return err(${6:1}, \"${7:empty input}\")",
+            "|   return ok(${0:0})"
+        ],
+        "description": "Function that returns result<T>"
+    },
+    "Check Result": {
+        "prefix": "ifok",
+        "body": [
+            "${1:result<i32>} ${2:r} = ${3:call()}",
+            "if ?${2:r}",
+            "|   ${4:echo(cstr(${2:r}.value))}",
+            "else",
+            "|   ${0:echo(\"error \" + ${2:r}.code + \": \" + ${2:r}.error)}"
+        ],
+        "description": "Call a function that returns result<T> and check it"
+    },
+    "Ignore Result": {
+        "prefix": "ignore",
+        "body": [
+            "_ ^= ${0:call()}"
+        ],
+        "description": "Ignore a result<T> on purpose"
     },
     "Struct": {
         "prefix": "struct",
@@ -61,40 +106,39 @@
             "[struct]${1:Name}",
             "|   ${2:i32} ${3:field} = ${4:0}",
             "|",
-            "|   [void]__init__(${5:i32}: ${6:value})",
-            "|   |   ${3:field} = ${6:value}$0"
+            "|   [${5:void}]${6:method}()",
+            "|   |   ${0:self.${3:field} = self.${3:field} + 1}"
         ],
-        "description": "Struct with a field and constructor"
+        "description": "Struct with a field and a method"
     },
-    "Constructor": {
-        "prefix": "init",
-        "body": [
-            "[void]__init__(${1})",
-            "|   $0"
-        ],
-        "description": "Struct constructor (__init__)"
-    },
-    "Method Outside Struct": {
+    "Method": {
         "prefix": "method",
         "body": [
-            "[${1:void}]${2:Struct}::${3:method}(${4})",
+            "[${1:void}]${2:method}(${3})",
             "|   $0"
         ],
-        "description": "Function associated with a struct (Struct::method)"
+        "description": "Method inside a struct, the object is `self`"
     },
     "Constant Declaration": {
         "prefix": "const",
         "body": [
             "const ${1:i32} ${2:NAME} = ${3:value}"
         ],
-        "description": "Declare a constant with an explicit type"
+        "description": "Constant with an explicit type"
     },
     "Final Declaration": {
         "prefix": "final",
         "body": [
             "final ${1:name} ^= ${2:value}"
         ],
-        "description": "Declare a constant with an inferred type"
+        "description": "Constant with an inferred type"
+    },
+    "Final Deferred": {
+        "prefix": "finald",
+        "body": [
+            "final ${1:i32} ${2:name}"
+        ],
+        "description": "Constant assigned later, on every path before it is read"
     },
     "Inferred Variable": {
         "prefix": "var",
@@ -113,14 +157,14 @@
     "Map Variable": {
         "prefix": "mapv",
         "body": [
-            "map<${1:string}, ${2:string}> ${3:name} = {${4}}"
+            "map<${1:string}, ${2:i32}> ${3:name} = {${4}}"
         ],
         "description": "Typed map variable"
     },
     "If Statement": {
         "prefix": "if",
         "body": [
-            "if (${1:condition})",
+            "if ${1:condition}",
             "|   $0"
         ],
         "description": "If statement"
@@ -128,7 +172,7 @@
     "If-Else Statement": {
         "prefix": "ifelse",
         "body": [
-            "if (${1:condition})",
+            "if ${1:condition}",
             "|   $2",
             "else",
             "|   $0"
@@ -138,45 +182,46 @@
     "If-Else If-Else Statement": {
         "prefix": "ifelseif",
         "body": [
-            "if (${1:condition1})",
+            "if ${1:condition1}",
             "|   $2",
-            "else if (${3:condition2})",
+            "else if ${3:condition2}",
             "|   $4",
             "else",
             "|   $0"
         ],
         "description": "If-else if-else statement"
     },
-    "For Loop": {
+    "For Range": {
         "prefix": "for",
         "body": [
-            "for ${1:i} in range(${2:array})",
+            "for ${1:i} in range(${2:n})",
             "|   $0"
         ],
-        "description": "For loop over array indices"
+        "description": "Loop from 0 to n - 1"
+    },
+    "For Range From To": {
+        "prefix": "forr",
+        "body": [
+            "for ${1:i} in range(${2:a}, ${3:b})",
+            "|   $0"
+        ],
+        "description": "Loop from a to b - 1"
+    },
+    "For Each": {
+        "prefix": "forin",
+        "body": [
+            "for ${1:x} in ${2:items}",
+            "|   $0"
+        ],
+        "description": "Loop over an array, the keys of a map or the bytes of a string"
     },
     "While Loop": {
         "prefix": "while",
         "body": [
-            "while (${1:condition})",
+            "while ${1:condition}",
             "|   $0"
         ],
         "description": "While loop"
-    },
-    "Lambda": {
-        "prefix": "lambda",
-        "body": [
-            "${1:name} ^= [${2:i32}](${3:i32}: ${4:x}) -> ${0:x}"
-        ],
-        "description": "One-line lambda"
-    },
-    "Block Lambda": {
-        "prefix": "lambdab",
-        "body": [
-            "${1:name} ^= [${2:i32}](${3:i32}: ${4:x}) :",
-            "|   ${0:return x}"
-        ],
-        "description": "Multi-line lambda"
     },
     "Use Modules": {
         "prefix": "use",
@@ -193,13 +238,6 @@
         ],
         "description": "Import a function from a module under an alias"
     },
-    "Pipe": {
-        "prefix": "pipe",
-        "body": [
-            "|> ${1:map}(${2:x}, [${3:i32}](${4:i32}: ${5:a}) -> ${0:a})"
-        ],
-        "description": "Pipe step with a lambda"
-    },
     "Return Statement": {
         "prefix": "return",
         "body": [
@@ -212,14 +250,14 @@
         "body": [
             "echo(${0:value})"
         ],
-        "description": "Echo statement"
+        "description": "Print a string"
     },
-    "Echo Integer": {
+    "Echo Value": {
         "prefix": "echoi",
         "body": [
-            "echo(toString_int(${0:value}))"
+            "echo(cstr(${0:value}))"
         ],
-        "description": "Print an i32 value"
+        "description": "Print a number or char"
     },
     "MONOSCRIPT Block": {
         "prefix": "pipeblock",

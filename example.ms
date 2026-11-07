@@ -1,86 +1,101 @@
-// Примерный псевдо-код на MONOSCRIPT — набросок, доделать по ходу
+// Пример на MONOSCRIPT: почти все возможности языка в одном файле
+/* Запуск: ms run example.ms */
 
 [struct]Player
 |   string name = "unknown"
 |   i32 hp = 100
-|   i1 alive = 1
-|   scores ^= [0, 0, 0, 0, 0]
+|   i1 alive = true
+|   array<i32> scores = [0, 0, 0]
 |
-|   [void]__init__(string: n, i32: startHp)
-|   |   name = n
-|   |   hp = startHp
-|
+|   // Урон: hp не опускается ниже нуля
 |   [void]damage(i32: amount)
-|   |   hp = hp - amount
-|   |   if (hp < 0)
-|   |   |   hp = 0
-|   |   |   alive = 0
+|   |   self.hp = self.hp - amount
+|   |   if self.hp <= 0
+|   |   |   self.hp = 0
+|   |   |   self.alive = false
 |
-|   [i32]totalScore()
+|   [i32]totalScore() @pure
 |   |   i32 sum = 0
-|   |   for i in range(scores)
-|   |   |   sum = sum + scores[i]
+|   |   for s in self.scores
+|   |   |   sum = sum + s
 |   |   return sum
 
 [i32]clamp(i32: x, i32: lo, i32: hi) @pure
-|   if (x < lo)
+|   if x < lo
 |   |   return lo
-|   else if (x > hi)
+|   else if x > hi
 |   |   return hi
 |   return x
 
 [i64]factorial(i64: n) @strict @pure
-|   if (n <= 1)
+|   if n <= 1
 |   |   return 1
 |   return n * factorial(n - 1)
 
-[i32]main() @entry
-|   p ^= Player("Max", 120)
-|
-|   // массивы внутри структуры
+// Шаблон функции: T выводится из аргументов
+[array<T>]filter<T>(array<T>: items, func: keep(T: x) -> i1)
+|   array<T> out = []
+|   for x in items
+|   |   if keep(x)
+|   |   |   push(out, x)
+|   return out
+
+[i1]isEven(i32: x)
+|   return x % 2 == 0
+
+// Ошибки как значения
+[result<i32>]parseDigit(string: s)
+|   if len(s) != 1
+|   |   return err(1, "expected one digit")
+|   char c = s[0]
+|   if c < '0' or c > '9'
+|   |   return err(2, "not a digit: " + s)
+|   return ok(c->i32 - '0'->i32)
+
+[i32]main()
+|   Player p = Player()
+|   p.name = "Max"
 |   p.scores[0] = 10
-|   p.scores[1] = 25
-|   p.scores = [5, 5, 5, 5, 5]
-|
-|   // проверка типов: i1 <- i1 ок, i1 <- i32 должно ругаться
-|   p.alive = 1
-|   // p.alive = "yes"   // ожидается: Type mismatch: expected i1, got string
+|   push(p.scores, 25)
 |
 |   p.damage(50)
 |   p.damage(100)
-|
-|   if (!p.alive)
-|   |   echo(scat(p.name, " is dead"))
-|   else
-|   |   echo(scat("hp: ", toString_int(p.hp)))
+|   if !p.alive
+|   |   echo(p.name + " is dead, score " + p.totalScore())
 |
 |   // while + break/continue
 |   i32 i = 0
-|   while (i < 10)
+|   while i < 10
 |   |   i = i + 1
-|   |   if (i % 2 == 0)
+|   |   if i % 2 == 0
 |   |   |   continue
-|   |   if (i > 7)
+|   |   if i > 7
 |   |   |   break
-|   |   echo(toString_int(clamp(i * 3, 0, 15)))
+|   |   echo(cstr(clamp(i * 3, 0, 15)))
 |
-|   // лямбды
-|   square ^= [i32](i32: x) -> x * x
-|   echo(toString_int(square(7)))
+|   // map: порядок вставки сохраняется
+|   map<string, i32> ports = {"ssh": 22}
+|   ports["http"] = 80
+|   if has(ports, "ssh")
+|   |   del(ports, "ssh")
+|   for name in ports
+|   |   echo(name + " = " + ports[name])
 |
-|   doubleAll ^= [array<i32>](array<i32>: a) :
-|   |   for j in range(a)
-|   |   |   a[j] = a[j] * 2
-|   |   return a
+|   array<i32> even = filter([1, 2, 3, 4, 5, 6], isEven)
+|   echo("even: " + len(even))
 |
-|   array<i32> nums = [1, 2, 3, 4, 5]
-|   nums = doubleAll(nums)
+|   result<i32> r = parseDigit("7")
+|   if ?r
+|   |   echo("digit " + r.value)
+|   else
+|   |   echo("error " + r.code + ": " + r.error)
 |
-|   // TODO: пайпы, когда будут map/filter в std
-|   // res ^= nums
-|   //     |> map(res, [i32](i32: a) -> a + 1)
-|   //     |> filter(res, [i32](i32: a) -> a > 4)
+|   f ^= 2.5                 // f64 по умолчанию
+|   small ^= f->i8
+|   final i32 limit
+|   limit = 3
+|   for k in range(1, limit)
+|   |   echo(cstr(k))
 |
-|   echo(toString_long(factorial(10)))
-|   echo(toString_int(p.totalScore()))
+|   echo(toString_long(factorial(10)) + " " + cstr(small))
 |   return 0

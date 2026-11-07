@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { PREFIX_RE, stripLineComment } from './analyzer';
+import { PREFIX_RE, opensBlock, stripLineComment } from './analyzer';
 
 // Отступы в MONOSCRIPT — это `|` + пробелы. Стандартный автоотступ VS Code
 // копирует только пробельные символы, поэтому Enter/Backspace/сдвиг блока
@@ -10,21 +10,7 @@ export function indentUnit(): string {
     return unit.startsWith('|') ? unit : '|   ';
 }
 
-const BLOCK_OPENERS: RegExp[] = [
-    /^\[.+?\]\s*(?:\w+\s*::\s*)?\w+\s*\(.*\)\s*(?:@\w+\s*)*$/,  // функция / метод
-    /^\[\s*struct\s*\]\s*\w+\s*(?:@\w+\s*)*$/,                   // структура
-    /^(?:if|while)\b.*$/,
-    /^for\s+\w+\s+in\b.*$/,
-    /^else(?:\s+if\b.*)?$/,
-    /\[.+?\]\s*\(.*\)\s*:$/                                       // блочная лямбда
-];
-
 const IMPORT_ENTRY = /^\|>\s*\w+(?:\s*->\s*\w+(?:\s*:\s*\w+)?)?$/;
-
-function opensBlock(code: string): boolean {
-    if (/@decl\b/.test(code)) { return false; }
-    return BLOCK_OPENERS.some(re => re.test(code));
-}
 
 function dropLastLevel(prefix: string): string {
     const idx = prefix.lastIndexOf('|');

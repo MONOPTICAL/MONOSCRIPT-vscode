@@ -1,8 +1,10 @@
 // Лёгкий построчный разбор .ms файлов: структура блоков по `|`, объявления
-// структур, функций, лямбд, полей и переменных. Не зависит от vscode API,
+// структур, функций, методов, полей и переменных. Не зависит от vscode API,
 // чтобы его можно было гонять в обычном node.
 
-export type SymbolKind = 'struct' | 'function' | 'method' | 'lambda' | 'field' | 'variable' | 'parameter';
+import { BUILTIN_FUNCTIONS } from './builtins';
+
+export type SymbolKind = 'struct' | 'function' | 'method' | 'field' | 'variable' | 'parameter';
 
 export interface Param {
     type: string;
@@ -15,8 +17,10 @@ export interface MsSymbol {
     /** Тип переменной/поля или тип возврата функции */
     type?: string;
     params?: Param[];
+    /** Параметры шаблона: `[T]first<T>(...)` — `['T']` */
+    typeParams?: string[];
     labels?: string[];
-    /** Для `[void]Player::damage(...)` — `Player` */
+    /** Для метода — структура, внутри которой он объявлен */
     owner?: string;
     line: number;
     character: number;
@@ -51,16 +55,31 @@ const IDENT = '[A-Za-z_][A-Za-z0-9_]*';
 export const TYPE = `${IDENT}(?:<(?:[\\w\\s,]|<(?:[\\w\\s,]|<[\\w\\s,]*>)*>)*>)?`;
 
 const NOT_TYPES = new Set([
-    'if', 'else', 'while', 'for', 'in', 'return', 'break', 'continue', 'and', 'or', 'not', 'is',
-    'use', 'const', 'final', 'public', 'private', 'this', 'defined', 'true', 'false', 'null', 'none'
+    'if', 'else', 'while', 'for', 'in', 'return', 'break', 'continue', 'and', 'or', 'is',
+    'use', 'const', 'final', 'public', 'private', 'this', 'self', 'defined', 'true', 'false', 'null', 'none'
 ]);
 
 const STRUCT_RE = new RegExp(`^\\[\\s*struct\\s*\\]\\s*(${IDENT})\\s*((?:@\\w+\\s*)*)$`);
-const FUNC_RE = new RegExp(`^\\[\\s*(${TYPE})\\s*\\]\\s*(?:(${IDENT})\\s*::\\s*)?(${IDENT})\\s*\\((.*)\\)\\s*((?:@\\w+\\s*)*)$`);
-const LAMBDA_RE = new RegExp(`^(?:final\\s+)?(${IDENT})\\s*\\^=\\s*\\[\\s*(${TYPE})\\s*\\]\\s*\\((.*?)\\)\\s*(->|:)`);
+// [ret]name<T, U>(params) @labels
+const FUNC_RE = new RegExp(`^\\[\\s*(${TYPE})\\s*\\]\\s*(${IDENT})\\s*(?:<([\\w\\s,]*)>)?\\s*\\((.*)\\)\\s*((?:@\\w+\\s*)*)$`);
 const DYN_VAR_RE = new RegExp(`^(final\\s+)?(${IDENT})\\s*\\^=\\s*(.*)$`);
-const TYPED_VAR_RE = new RegExp(`^(const\\s+)?(${TYPE})\\s+(${IDENT})\\s*(?:=(?!=)\\s*(.*))?$`);
-const FOR_RE = new RegExp(`^for\\s+(${IDENT})\\s+in\\b`);
+// i32 x = 1 / const i32 x = 1 / final i32 x (присваивание позже)
+const TYPED_VAR_RE = new RegExp(`^((?:const|final)\\s+)?(${TYPE})\\s+(${IDENT})\\s*(?:=(?!=)\\s*(.*))?$`);
+const FOR_RE = new RegExp(`^for\\s+(${IDENT})\\s+in\\s+(.*)$`);
+const CALL_RE = new RegExp(`^(${IDENT})\\s*\\(.*\\)$`);
+
+const BLOCK_OPENERS: RegExp[] = [
+    /^\[.+?\]\s*\w+\s*(?:<[\w\s,]*>)?\s*\(.*\)\s*(?:@\w+\s*)*$/,  // функция / метод / шаблон
+    /^\[\s*struct\s*\]\s*\w+\s*(?:@\w+\s*)*$/,                     // структура
+    /^(?:if|while)\b.*$/,
+    /^for\s+\w+\s+in\b.*$/,
+    /^else(?:\s+if\b.*)?$/
+];
+
+/** Строка (без префикса `|` и комментария) открывает блок на следующей строке. */
+export function opensBlock(code: string): boolean {
+    return BLOCK_OPENERS.some(re => re.test(code));
+}
 
 export function countDepth(prefix: string): number {
     let n = 0;
@@ -134,16 +153,60 @@ export function parseParams(text: string): Param[] {
 export function inferType(rhs: string): string | undefined {
     const value = rhs.trim();
     if (/^"/.test(value)) { return 'string'; }
-    if (/^-?\d+\.\d*$/.test(value)) { return 'float'; }
-    if (/^-?\d+$/.test(value)) { return 'i32'; }
+    if (/^'(?:\\.|[^'\\])'$/.test(value)) { return 'char'; }
+    // Дробный литерал по умолчанию — f64
+    if (/^-?\d+\.\d*$/.test(value)) { return 'f64'; }
+    if (/^-?\d+$/.test(value)) {
+        // Как в компиляторе: целый литерал получает самый узкий подходящий тип
+        const n = Number(value);
+        if (n === 0 || n === 1) { return 'i1'; }
+        if (n >= -128 && n <= 127) { return 'i8'; }
+        if (n >= -32768 && n <= 32767) { return 'i16'; }
+        if (n >= -2147483648 && n <= 2147483647) { return 'i32'; }
+        return 'i64';
+    }
     if (/^(true|false)$/.test(value)) { return 'i1'; }
     if (/^\[/.test(value) && !/^\[\s*[\w<>, ]+\s*\]\s*\(/.test(value)) { return 'array'; }
     if (/^\{/.test(value)) { return 'map'; }
     const ctor = value.match(new RegExp(`^(${IDENT})\\s*\\(`));
     if (ctor && /^[A-Z]/.test(ctor[1])) { return ctor[1]; }
-    const cast = value.match(/->\s*(i1|i8|i16|i32|i64|float)\s*$/);
+    const cast = value.match(/->\s*(i1|i8|i16|i32|i64|float|f64|char)\s*$/);
     if (cast) { return cast[1]; }
     return undefined;
+}
+
+/** `name(...)`, где закрывающая скобка вызова — последний символ. Возвращает имя. */
+function wholeCall(value: string): string | undefined {
+    const m = value.match(CALL_RE);
+    if (!m) { return undefined; }
+    let depth = 0;
+    let inString = false;
+    for (let i = value.indexOf('('); i < value.length; i++) {
+        const ch = value[i];
+        if (inString) {
+            if (ch === '\\') { i++; } else if (ch === '"') { inString = false; }
+            continue;
+        }
+        if (ch === '"') { inString = true; }
+        else if (ch === '(') { depth++; }
+        else if (ch === ')' && --depth === 0) { return i === value.length - 1 ? m[1] : undefined; }
+    }
+    return undefined;
+}
+
+/** Тип элемента при обходе: `array<T>` -> T, `map<K, V>` -> K, `string` -> char. */
+export function elementType(type: string | undefined): string | undefined {
+    if (!type) { return undefined; }
+    if (type === 'string') { return 'char'; }
+    const m = type.match(/^(array|map)<(.*)>$/);
+    if (!m) { return undefined; }
+    const args = splitTopLevel(m[2]);
+    return args[0];
+}
+
+/** Зависит ли тип от параметров шаблона: `array<T>` при `<T>`. */
+function hasTypeParams(type: string, typeParams: string[] | undefined): boolean {
+    return !!typeParams?.some(t => new RegExp(`\\b${t}\\b`).test(type));
 }
 
 export function analyzeLines(text: string): LineInfo[] {
@@ -214,13 +277,16 @@ function collectDoc(rawLines: string[], line: number): string | undefined {
     return docs.length ? docs.join('\n') : undefined;
 }
 
-export function analyze(text: string): MsDocument {
+/** `external` — тип возврата функции из других файлов (для `x ^= f()`, когда `f` объявлена не здесь). */
+export function analyze(text: string, external?: (name: string) => string | undefined): MsDocument {
     const rawLines = text.split(/\r?\n/);
     const lines = analyzeLines(text);
     const symbols: MsSymbol[] = [];
     const all: MsSymbol[] = [];
-    // Стек открытых блочных символов (структуры, функции, лямбды)
+    // Стек открытых блочных символов (структуры, функции, методы)
     const stack: MsSymbol[] = [];
+    const pendingCalls: { sym: MsSymbol; callee: string }[] = [];
+    const pendingFors: { sym: MsSymbol; iterable: string }[] = [];
 
     const attach = (sym: MsSymbol) => {
         while (stack.length && (stack[stack.length - 1].depth >= sym.depth || stack[stack.length - 1].endLine < sym.line)) {
@@ -243,11 +309,11 @@ export function analyze(text: string): MsDocument {
         const col = info.prefix.length;
         const base = { line: i, character: col, depth: info.depth, children: [] as MsSymbol[] };
 
-        const declareVar = (name: string, type: string | undefined, offset: number) => {
+        const declareVar = (name: string, type: string | undefined, offset: number): MsSymbol | undefined => {
             // Повторное присваивание уже объявленной переменной — не новое объявление
             const scope = enclosing(stack, i);
             const existing = all.find(s => s.name === name && (s.kind === 'variable' || s.kind === 'field' || s.kind === 'parameter') && s.parent === scope);
-            if (existing && !TYPED_VAR_RE.test(code)) { return; }
+            if (existing && !TYPED_VAR_RE.test(code)) { return undefined; }
             const isField = scope?.kind === 'struct';
             const sym: MsSymbol = {
                 ...base, character: col + offset, name, kind: isField ? 'field' : 'variable', type,
@@ -259,6 +325,7 @@ export function analyze(text: string): MsDocument {
                 sym.parent = scope;
                 all.push(sym);
             }
+            return sym;
         };
 
 
@@ -274,29 +341,16 @@ export function analyze(text: string): MsDocument {
         if (m) {
             const labels = labelsOf(m[5]);
             const params = parseParams(m[4]);
-            const end = labels.includes('@decl') ? i : blockEnd(lines, i, info.depth);
+            const typeParams = m[3]?.split(',').map(t => t.trim()).filter(t => t.length > 0);
             const parentStruct = stack.find(s => s.kind === 'struct' && s.depth < info.depth && s.endLine >= i);
-            const kind: SymbolKind = m[2] || parentStruct ? 'method' : 'function';
+            const kind: SymbolKind = parentStruct ? 'method' : 'function';
             const sym: MsSymbol = {
                 ...base,
-                character: col + code.indexOf(m[3], code.indexOf(']')),
-                name: m[3], kind, type: m[1].replace(/\s+/g, ''), params, labels,
-                owner: m[2] ?? parentStruct?.name,
-                endLine: end, doc: collectDoc(rawLines, i)
-            };
-            attach(sym);
-            stack.push(sym);
-            addParams(sym, params, i, all, rawLines[i]);
-            continue;
-        }
-
-        m = code.match(LAMBDA_RE);
-        if (m) {
-            const params = parseParams(m[3]);
-            const sym: MsSymbol = {
-                ...base, name: m[1], kind: 'lambda', type: m[2].replace(/\s+/g, ''), params,
-                endLine: m[4] === ':' ? blockEnd(lines, i, info.depth) : i,
-                doc: collectDoc(rawLines, i)
+                character: col + code.indexOf(m[2], code.indexOf(']')),
+                name: m[2], kind, type: m[1].replace(/\s+/g, ''), params, labels,
+                typeParams: typeParams?.length ? typeParams : undefined,
+                owner: parentStruct?.name,
+                endLine: blockEnd(lines, i, info.depth), doc: collectDoc(rawLines, i)
             };
             attach(sym);
             stack.push(sym);
@@ -306,14 +360,19 @@ export function analyze(text: string): MsDocument {
 
         m = code.match(FOR_RE);
         if (m) {
-            const owner = stack[stack.length - 1];
-            all.push({ ...base, character: col + code.indexOf(m[1], 3), name: m[1], kind: 'variable', type: 'i32', endLine: blockEnd(lines, i, info.depth), parent: owner });
+            const owner = enclosing(stack, i) ?? stack[stack.length - 1];
+            const sym: MsSymbol = { ...base, character: col + code.indexOf(m[1], 3), name: m[1], kind: 'variable', endLine: blockEnd(lines, i, info.depth), parent: owner };
+            all.push(sym);
+            pendingFors.push({ sym, iterable: m[2].trim() });
             continue;
         }
 
         m = code.match(DYN_VAR_RE);
         if (m) {
-            declareVar(m[2], inferType(m[3]), code.indexOf(m[2]));
+            if (m[2] === '_') { continue; } // `_ ^= save()` — результат игнорируется
+            const sym = declareVar(m[2], inferType(m[3]), code.indexOf(m[2]));
+            const callee = sym && !sym.type ? wholeCall(m[3].trim()) : undefined;
+            if (sym && callee) { pendingCalls.push({ sym, callee }); }
             continue;
         }
 
@@ -325,7 +384,56 @@ export function analyze(text: string): MsDocument {
 
     }
 
+    // Типы, которые известны только после разбора всего файла:
+    // `x ^= f()` (функцию можно вызывать до объявления) и переменная цикла `for`
+    for (const { sym, callee } of pendingCalls) {
+        sym.type = returnTypeOf(all, callee) ?? external?.(callee);
+    }
+    for (const { sym, iterable } of pendingFors) {
+        if (/^range\s*\(/.test(iterable)) { sym.type = 'i32'; continue; }
+        const callee = wholeCall(iterable);
+        if (callee) { sym.type = elementType(returnTypeOf(all, callee) ?? external?.(callee)); continue; }
+        // items / self.scores / player.inventory.items
+        if (/^[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*$/.test(iterable)) {
+            sym.type = elementType(typeOfPath(all, iterable.split('.').map(x => x.trim()), sym.line));
+        }
+    }
+
     return { lines, symbols, all };
+}
+
+/** Тип выражения `a.b.c` в строке `line`: переменная (или `self`), затем поля структур. */
+function typeOfPath(all: MsSymbol[], path: string[], line: number): string | undefined {
+    let type: string | undefined;
+    if (path[0] === 'self') {
+        type = all.filter(s => s.kind === 'method' && s.line <= line && s.endLine >= line).sort((a, b) => b.depth - a.depth)[0]?.owner;
+    } else {
+        type = all
+            .filter(s => s.name === path[0] && (s.kind === 'variable' || s.kind === 'parameter') && s.line <= line && s.endLine >= line)
+            .sort((a, b) => b.line - a.line)[0]?.type;
+    }
+    for (const field of path.slice(1)) {
+        const struct = all.find(s => s.kind === 'struct' && s.name === type);
+        type = struct?.children.find(c => c.kind === 'field' && c.name === field)?.type;
+    }
+    return type;
+}
+
+/** Параметр в том виде, как он пишется в коде: `i32: x`, `func: keep(T: x) -> i1`. */
+export function formatParam(p: Param): string {
+    const fn = p.type.match(/^func<(.*)>$/);
+    if (!fn) { return `${p.type}: ${p.name}`; }
+    const types = splitTopLevel(fn[1]);
+    const ret = types.pop() ?? 'void';
+    return `func: ${p.name}(${types.join(', ')}) -> ${ret}`;
+}
+
+function returnTypeOf(all: MsSymbol[], callee: string): string | undefined {
+    if (/^[A-Z]/.test(callee) && all.some(s => s.kind === 'struct' && s.name === callee)) { return callee; }
+    const fn = all.find(s => s.kind === 'function' && s.name === callee);
+    if (fn) { return fn.type && !hasTypeParams(fn.type, fn.typeParams) ? fn.type : undefined; }
+    const builtin = BUILTIN_FUNCTIONS.find(f => f.name === callee);
+    return builtin && !/\b[TKV]\b/.test(builtin.ret) && builtin.ret !== 'range' ? builtin.ret : undefined;
 }
 
 function enclosing(stack: MsSymbol[], line: number): MsSymbol | undefined {
@@ -357,47 +465,50 @@ export function signatureOf(sym: MsSymbol): string {
         case 'struct':
             return `[struct]${sym.name}`;
         case 'function':
-        case 'method':
-        case 'lambda': {
-            const params = (sym.params ?? []).map(p => `${p.type}: ${p.name}`).join(', ');
+        case 'method': {
+            const params = (sym.params ?? []).map(formatParam).join(', ');
             const labels = sym.labels?.length ? ' ' + sym.labels.join(' ') : '';
-            if (sym.kind === 'lambda') { return `${sym.name} ^= [${sym.type}](${params})`; }
-            const owner = sym.owner && sym.kind === 'method' ? `${sym.owner}::` : '';
-            return `[${sym.type}]${owner}${sym.name}(${params})${labels}`;
+            const generic = sym.typeParams?.length ? `<${sym.typeParams.join(', ')}>` : '';
+            return `[${sym.type}]${sym.name}${generic}(${params})${labels}`;
         }
         default:
             return sym.type ? `${sym.type} ${sym.name}` : `${sym.name} ^= …`;
     }
 }
 
-/** Самая глубокая функция/лямбда/структура, внутри которой находится строка. */
+/** Самая глубокая функция/метод/структура, внутри которой находится строка. */
 export function scopeAt(doc: MsDocument, line: number): MsSymbol | undefined {
     let best: MsSymbol | undefined;
     for (const s of doc.all) {
-        if ((s.kind === 'function' || s.kind === 'method' || s.kind === 'lambda' || s.kind === 'struct') && s.line <= line && s.endLine >= line) {
+        if ((s.kind === 'function' || s.kind === 'method' || s.kind === 'struct') && s.line <= line && s.endLine >= line) {
             if (!best || s.depth >= best.depth) { best = s; }
         }
     }
     return best;
 }
 
-/** Символы, видимые в строке `line`: глобальные + из всех объемлющих областей, объявленные выше. */
+/** Метод, внутри которого находится строка (для `self`). */
+export function methodAt(doc: MsDocument, line: number): MsSymbol | undefined {
+    for (let s = scopeAt(doc, line); s; s = s.parent) {
+        if (s.kind === 'method') { return s; }
+    }
+    return undefined;
+}
+
+/**
+ * Символы, видимые в строке `line`: глобальные + из всех объемлющих областей, объявленные выше.
+ * Поля и методы структуры сюда не входят: внутри метода к ним обращаются через `self.`.
+ */
 export function visibleSymbols(doc: MsDocument, line: number): MsSymbol[] {
     const scopes = new Set<MsSymbol | undefined>([undefined]);
     for (let s = scopeAt(doc, line); s; s = s.parent) { scopes.add(s); }
-    // Поля структуры видны внутри её методов
     const result: MsSymbol[] = [];
     for (const sym of doc.all) {
         if (!scopes.has(sym.parent)) { continue; }
+        if (sym.kind === 'field' || sym.kind === 'method') { continue; }
         const isLocal = sym.kind === 'variable' || sym.kind === 'parameter';
         if (isLocal && sym.parent && sym.line > line) { continue; }
         result.push(sym);
-    }
-    for (const s of scopes) {
-        if (s?.kind === 'method' && s.owner) {
-            const struct = doc.all.find(x => x.kind === 'struct' && x.name === s.owner);
-            if (struct) { result.push(...struct.children.filter(c => !result.includes(c))); }
-        }
     }
     return result;
 }
