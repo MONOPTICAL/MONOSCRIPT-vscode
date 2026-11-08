@@ -28,6 +28,7 @@ export const GUIDE_SECTIONS: Record<string, Record<GuideLanguage, string>> = {
     generics: { ru: 'Шаблоны функций', en: 'Generic functions' },
     funcParams: { ru: 'Функции как параметры', en: 'Passing functions' },
     result: { ru: 'Ошибки как значения: result', en: 'Errors as values: result' },
+    handling: { ru: 'Обработка на месте: attempt и ? else', en: 'Local handling: attempt and ? else' },
     labels: { ru: 'Метки', en: 'Labels' },
     strict: { ru: '@strict', en: '@strict' },
     pure: { ru: '@pure', en: '@pure' },
@@ -41,7 +42,7 @@ export const GUIDE_SECTIONS: Record<string, Record<GuideLanguage, string>> = {
 /** Раздел справочника для слова языка: ключевого слова, типа, метки, встроенной функции. */
 export function sectionForWord(word: string): string | undefined {
     const byWord: Record<string, string> = {
-        if: 'control', else: 'control', while: 'control', for: 'for', in: 'for', break: 'control', continue: 'control',
+        if: 'control', else: 'control', attempt: 'handling', panic: 'handling', panic_info: 'handling', while: 'control', for: 'for', in: 'for', break: 'control', continue: 'control',
         return: 'functions', and: 'operators', or: 'operators', use: 'modules',
         const: 'variables', final: 'final', self: 'methods', true: 'booleans', false: 'booleans',
         i1: 'booleans', i8: 'numbers', i16: 'numbers', i32: 'numbers', i64: 'numbers', float: 'numbers', f64: 'numbers',

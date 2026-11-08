@@ -243,7 +243,7 @@
         "type-expression": {
             "patterns": [
                 {
-                    "match": "\\b(i1|i8|i16|i32|i64|float|f64|char|string|void|auto)\\b",
+                    "match": "\\b(i1|i8|i16|i32|i64|float|f64|char|string|void|auto|panic_info)\\b",
                     "name": "storage.type.primitive.ms"
                 },
                 {
@@ -338,7 +338,7 @@
         "declarations": {
             "patterns": [
                 {
-                    "match": "(?:\\b(const|final)\\s+)?(?<![.\\w])(?!(?:if|else|while|for|in|return|break|continue|and|or|is|use|const|final|public|private|this|self|defined|true|false|null|none|struct)\\b)([A-Za-z_][A-Za-z0-9_]*(?:<(?:[\\w\\s,]|<(?:[\\w\\s,]|<[\\w\\s,]*>)*>)*>)?)\\s+(?!(?:if|else|while|for|in|return|break|continue|and|or|is|use|const|final|public|private|this|self|defined|true|false|null|none|struct)\\b)([A-Za-z_][A-Za-z0-9_]*)\\s*(?=$|//|=(?!=))",
+                    "match": "(?:\\b(const|final)\\s+)?(?<![.\\w])(?!(?:if|else|attempt|panic|while|for|in|return|break|continue|and|or|is|use|const|final|public|private|this|self|defined|true|false|null|none|struct)\\b)([A-Za-z_][A-Za-z0-9_]*(?:<(?:[\\w\\s,]|<(?:[\\w\\s,]|<[\\w\\s,]*>)*>)*>)?)\\s+(?!(?:if|else|attempt|panic|while|for|in|return|break|continue|and|or|is|use|const|final|public|private|this|self|defined|true|false|null|none|struct)\\b)([A-Za-z_][A-Za-z0-9_]*)\\s*(?=$|//|=(?!=))",
                     "captures": {
                         "1": {
                             "name": "storage.modifier.ms"
@@ -370,6 +370,21 @@
         },
         "keywords": {
             "patterns": [
+                {
+                    "match": "\\b(else|panic)\\s+(?!if\\b)([A-Za-z_][A-Za-z0-9_]*)\\s*(?=$|//)",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.control.exception.ms"
+                        },
+                        "2": {
+                            "name": "variable.parameter.handler.ms"
+                        }
+                    }
+                },
+                {
+                    "match": "\\b(attempt|panic)\\b",
+                    "name": "keyword.control.exception.ms"
+                },
                 {
                     "match": "\\b(if|else)\\b",
                     "name": "keyword.control.conditional.ms"
@@ -539,7 +554,7 @@
         "function-call": {
             "patterns": [
                 {
-                    "match": "\\b(echo|input|scat|substr|strfind|startsWith|count|split|toInt|toString_int|toString_char|toString_bool|toString_float|toString_f64|toString_long|toArray|joinChars|gc_collect|len|has|del|copy|push|pop|ok|err|range|cstr)\\s*(?=\\()",
+                    "match": "\\b(echo|input|scat|substr|strfind|startsWith|count|split|reverse|toInt|toString_int|toString_char|toString_bool|toString_float|toString_f64|toString_long|toArray|joinChars|gc_collect|len|has|del|copy|push|pop|ok|err|range|cstr)\\s*(?=\\()",
                     "captures": {
                         "1": {
                             "name": "support.function.builtin.ms"
@@ -570,7 +585,7 @@
         "type-expression-standalone": {
             "patterns": [
                 {
-                    "match": "\\b(i1|i8|i16|i32|i64|float|f64|char|string|void|auto)\\b",
+                    "match": "\\b(i1|i8|i16|i32|i64|float|f64|char|string|void|auto|panic_info)\\b",
                     "name": "storage.type.primitive.ms"
                 },
                 {
@@ -623,6 +638,10 @@
                 {
                     "match": "!",
                     "name": "keyword.operator.logical.ms"
+                },
+                {
+                    "match": "(?<=[\\w)\\]])\\?+",
+                    "name": "keyword.operator.result-try.ms"
                 },
                 {
                     "match": "\\?(?=\\s*[\\w(])",

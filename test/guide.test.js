@@ -68,7 +68,7 @@ test('страница панели: CSP с nonce, без внешних рес�
     assert.equal((page.match(new RegExp(`nonce="${nonce}"`, 'g')) ?? []).length, 2);
     assert.ok(!/<script(?![^>]*nonce)/.test(page));
     assert.ok(!/src="https?:/.test(page));
-    assert.match(page, /scrollToId\("ошибки-как-значения-result"\)/);
+    assert.match(page, /scrollToId\("ошибки-как-значения-result", true\)/);
 });
 
 test('у слов языка в подсказках есть раздел справочника', () => {

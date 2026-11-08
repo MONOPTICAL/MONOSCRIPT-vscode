@@ -7,11 +7,11 @@ const path = require('path');
 const IDENT = String.raw`[A-Za-z_][A-Za-z0-9_]*`;
 // Тип: i32, Player, array<i32>, map<string, array<i32>>, func<i32, i32> (до трёх уровней вложенности)
 const TYPE = String.raw`[A-Za-z_][A-Za-z0-9_]*(?:<(?:[\w\s,]|<(?:[\w\s,]|<[\w\s,]*>)*>)*>)?`;
-const PRIMITIVES = 'i1|i8|i16|i32|i64|float|f64|char|string|void|auto';
+const PRIMITIVES = 'i1|i8|i16|i32|i64|float|f64|char|string|void|auto|panic_info';
 const CONTAINERS = 'array|map|func|result';
-const KEYWORDS_NOT_TYPES = 'if|else|while|for|in|return|break|continue|and|or|is|use|const|final|public|private|this|self|defined|true|false|null|none|struct';
+const KEYWORDS_NOT_TYPES = 'if|else|attempt|panic|while|for|in|return|break|continue|and|or|is|use|const|final|public|private|this|self|defined|true|false|null|none|struct';
 // Функции из mono/mono.toml и встроенные в компилятор (len, push, ok, ...)
-const BUILTINS = 'echo|input|scat|substr|strfind|startsWith|count|split|toInt|toString_int|toString_char|toString_bool|toString_float|toString_f64|toString_long|toArray|joinChars|gc_collect|len|has|del|copy|push|pop|ok|err|range|cstr';
+const BUILTINS = 'echo|input|scat|substr|strfind|startsWith|count|split|reverse|toInt|toString_int|toString_char|toString_bool|toString_float|toString_f64|toString_long|toArray|joinChars|gc_collect|len|has|del|copy|push|pop|ok|err|range|cstr';
 
 const grammar = {
     $schema: 'https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json',
@@ -224,6 +224,15 @@ const grammar = {
 
         keywords: {
             patterns: [
+                // Обработчики attempt: `else error`, `panic info` — имя связывается с ошибкой
+                {
+                    match: String.raw`\b(else|panic)\s+(?!if\b)(${IDENT})\s*(?=$|//)`,
+                    captures: {
+                        1: { name: 'keyword.control.exception.ms' },
+                        2: { name: 'variable.parameter.handler.ms' }
+                    }
+                },
+                { match: String.raw`\b(attempt|panic)\b`, name: 'keyword.control.exception.ms' },
                 { match: String.raw`\b(if|else)\b`, name: 'keyword.control.conditional.ms' },
                 { match: String.raw`\b(while|for|in)\b`, name: 'keyword.control.loop.ms' },
                 { match: String.raw`\b(return|break|continue)\b`, name: 'keyword.control.flow.ms' },
@@ -353,6 +362,8 @@ const grammar = {
                 { match: String.raw`\*\*|[+\-*/%]`, name: 'keyword.operator.arithmetic.ms' },
                 { match: '<|>', name: 'keyword.operator.comparison.ms' },
                 { match: '!', name: 'keyword.operator.logical.ms' },
+                // r? / r?? — развернуть result или сразу вернуть ошибку из функции
+                { match: String.raw`(?<=[\w)\]])\?+`, name: 'keyword.operator.result-try.ms' },
                 // ?r — то же, что r.ok
                 { match: String.raw`\?(?=\s*[\w(])`, name: 'keyword.operator.result-check.ms' }
             ]

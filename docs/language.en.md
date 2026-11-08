@@ -262,7 +262,9 @@ Floating-point numbers print in their shortest form: `1.5`, `3.0`, `0.1`, `1.7e+
 
 ### Strings
 
-`string` is an immutable sequence of UTF-8 bytes. Escapes are `\n`, `\t`, `\r`, `\f`, `\b`, `\0`, `\'`, `\"` and `\\`. The same escapes work in `char` literals.
+`string` is an immutable sequence of UTF-8 bytes. The length is stored with the string, so `len(s)` and `s[i]` take constant time. Escapes are `\n`, `\t`, `\r`, `\f`, `\b`, `\'`, `\"` and `\\`. The same escapes work in `char` literals, plus `'\0'`.
+
+A string cannot contain a NUL byte: the literal `"a\0b"` fails with `Strings cannot contain a NUL byte`, and `cstr('\0')` stops the program.
 
 ```ms
 string s = "abc"
@@ -354,6 +356,27 @@ else
 ```
 
 A condition must be a number or an `i1`. `if c` with a `char c` fails with `If condition must be ...`.
+
+### One-line branches
+
+A single simple statement can follow `:` on the same line. `else` and `else if` still start on their own lines, and one-line branches mix with indented ones:
+
+```ms
+[i32]sign(i32: n)
+|   if n < 0: return -1
+|   else if n == 0: return 0
+|   else: return 1
+
+[void]show(i32: n)
+|   if n > 100
+|   |   echo("big")
+|   |   echo("very big")
+|   else: echo("small")
+```
+
+- A branch holds exactly one statement: an assignment, a call, `return`, `break`, `continue`, `const` or `final`. A nested `if` or loop fails with `Inline if/else requires a single simple statement`; write those as blocks.
+- `if x:` with nothing after the colon fails with `Expected a statement after ':'`.
+- Only `if` / `else` have the `:` form. `while x: ...` does not parse.
 
 ### while
 
@@ -461,7 +484,8 @@ An example from the compiler tests that counts tags:
 
 ```ms
 map<string, i32> tagCount = {}
-for t in ["remote", "admin", "web", "admin"]
+array<string> tags = ["remote", "admin", "web", "admin"]
+for t in tags
 |   if has(tagCount, t)
 |   |   tagCount[t] = tagCount[t] + 1
 |   else
@@ -639,20 +663,40 @@ A function that can fail returns `result<T>`. The caller checks it, and the prog
 | Field | Type | Meaning |
 |---|---|---|
 | `r.ok` | `i1` | Whether there is a value |
-| `r.value` | `T` | The value. Reading it from an error stops the program |
+| `r.value` | `T` | The value. Reading it from an error is a panic |
 | `r.code` | `i32` | Error code |
 | `r.error` | `string` | Error message |
 
-You can pass an error up by hand:
+### The `?` operator: pass an error up
+
+Postfix `r?` unwraps a successful result. If `r` holds an error, the function returns it right away with the same code and message:
+
+```ms
+[result<i32>]sumNumbers(string: a, string: b)
+|   i32 x = toInt(a)?
+|   i32 y = toInt(b)?
+|   return ok(x + y)
+
+[i32]main()
+|   r ^= sumNumbers("2", "x")
+|   if !r.ok: echo(cstr(r.code) + " " + r.error)   // → 1 expected a decimal integer
+|   return 0
+```
+
+- Without a handler, `?` works only in a function that itself returns `result<U>`. `U` can differ from the unwrapped type. In `main` without a handler it fails with `Postfix '?' requires a function returning result<T>`; [`attempt` and `? else`](#local-handling-attempt-and--else) handle the error in place.
+- Prefix `?r` is still a success check (`i1`); postfix `r?` unwraps.
+- The operand is evaluated once. `?` binds before arithmetic: `toInt(s)? * 2`.
+- Cast after unwrapping with `toInt(s)?->i64`. A nested result unwraps with two marks: `r??`.
+- For `result<void>`, use it as a statement: `save(path)?`.
+
+The same by hand, without `?`:
 
 ```ms
 [result<i32>]twoDigits(string: a, string: b)
 |   result<i32> x = parseDigit(a)
-|   if !x.ok
-|   |   return err(x.code, x.error)
+|   if !x.ok: return err(x.code, x.error)
 |   result<i32> y = parseDigit(b)
-|   if !y.ok
-|   |   return y
+|   if !y.ok: return y
 |   return ok(x.value * 10 + y.value)
 ```
 
@@ -663,7 +707,50 @@ Rules:
 - **The value in `ok()` converts to `T` by the usual rules:** `ok(x)` with `i32 x` works for `result<i64>`.
 - **The fields of a result are read-only.** A result cannot be compared or joined with a string.
 - **Results can be stored, passed and returned:** they go into arrays and maps (`array<result<i32>>`, `map<string, result<i32>>`), into function arguments and out of methods.
-- **A forgotten check stops the program with the original reason:** `result has no value: not a digit: z at line 13`.
+- **A forgotten check is a panic with the original reason:** `result has no value: not a digit: z at line 13`. `panic info` catches it; otherwise the program exits with code `101`.
+
+### Local handling: `attempt` and `? else`
+
+An error can be handled right where it happens, including in an ordinary function such as `[i32]main()`:
+
+```ms
+[i32]main()
+|   port ^= toInt("invalid")? else 8080
+|   n ^= toInt("42")? else: echo(error.error); return error.code
+|
+|   attempt
+|   |   value ^= toInt("7")?
+|   |   array<i32> rows = [value]
+|   |   echo("" + rows[9])
+|   else error
+|   |   echo(error.error)
+|   panic info
+|   |   echo(info.message + " at line " + info.line)
+|   return 0
+```
+
+**`r? else value`** is a replacement on error. The result is evaluated once, the replacement only on error. It must fit the unwrapped type (`toInt(s)? else "bad"` fails with `Fallback: Type mismatch`). Replacements chain: `a()? else b()? else 3`. Inside a larger expression, put the replacement in parentheses: `"" + (r? else 'B')`. `result<void>` has no replacement value. It also works for globals: `i32 port = toInt(s)? else 8080`.
+
+**`r? else: statements`** is a one-line action on error. Statements are separated by `;` and the last one must be `return`, `break` or `continue`. Inside it, `error` is available (`result<void>`, read-only `.ok`, `.code`, `.error`); outside it is not. The action takes the rest of the line, so put it at the end of a statement:
+
+```ms
+for s in inputs
+|   n ^= toInt(s)? else: echo("skip"); continue
+|   echo("" + n)
+```
+
+**`attempt`** is a block with handlers at the same level:
+- `else error` takes errors from bare `?` inside the block in the **same function**. Called functions still return their errors through their own `result`.
+- `panic info` takes panics, including from deeper calls: integer division by zero and overflow, invalid casts, array or string bounds, `pop` from an empty array, a missing map key, map mutation during iteration, reading `.value` from an error, and failing standard-library string functions. `info` is a read-only `panic_info` snapshot with `.message` and `.line` (`0` if unknown).
+
+Rules:
+- At least one handler is required, and each kind at most once (`Duplicate else handler`).
+- Body variables are not visible in the handlers or after the `attempt`.
+- When a handler finishes, execution continues after the whole `attempt`. Handlers may `return`, `break` or `continue`.
+- A failure inside a handler goes to an outer `attempt`, never to a sibling handler of the same block.
+- `? else` handles only `result` errors: a panic while evaluating the operand or the replacement goes to the surrounding `panic info`.
+- Side effects are not rolled back. Out-of-memory and native crashes still end the program. There is no `defer` or automatic resource cleanup yet.
+- A `final` variable assigned in an `attempt` body counts as assigned after it only if every handler leaves the function.
 
 ## Labels
 
@@ -702,7 +789,11 @@ A pure function changes nothing outside itself. The compiler checks that it:
 - does not call impure functions such as `echo`;
 - does not read or write global variables;
 - does not change the objects passed to it, including through a new reference to them (`P q = x`);
+- does not return an object passed to it or put one into another object or a `result`: `return a` with `array<i32>: a` is an error;
+- does not copy an object when the copy still shares nested mutable objects with the argument: `copy(a)` of an `array<array<i32>>` is an error, because `copy` detaches only the outer array;
 - accepts only `@pure` functions in `func` parameters.
+
+The last two checks are conservative and can reject safe code. Both report `Pure function cannot create a new reference to object passed to it`.
 
 It can change its own local objects and copies:
 
@@ -769,7 +860,8 @@ use
 | `startsWith(s, prefix) -> i1` | Whether the string starts with the prefix |
 | `count(s, sub) -> i32` | Non-overlapping matches: `count("abcabc", "abc") == 2` |
 | `split(s, delim) -> array<string>` | Split: `split("a,bb,c", ",")` gives `["a", "bb", "c"]` |
-| `toInt(s) -> i32` | Parse an integer: `toInt("  42") == 42`, `toInt("12abc") == 12`, `toInt("abc") == 0` |
+| `reverse(s) -> string` | The string reversed (by bytes): `reverse("abc") == "cba"` |
+| `toInt(s) -> result<i32>` | Strict parsing: digits with an optional leading `+` / `-`. `"42"`, `"+7"`, `"-2147483648"` succeed; `""`, `" 1"`, `"12abc"`, `"-"` fail with code `1`; `"2147483648"` fails with code `2` (outside `i32`) |
 | `toArray(s) -> array<char>` | Copy of the string as an array of bytes |
 | `joinChars(array<char>) -> string` | String from an array of `char` |
 | `toString_int`, `toString_long`, `toString_float`, `toString_f64`, `toString_bool`, `toString_char` | A value of a specific type to string |
@@ -795,12 +887,12 @@ Special cases of `split`:
 | Function | Description |
 |---|---|
 | `ok(x)`, `ok()` | Successful `result` |
-| `err(code, message)`, `err(message)` | Error |
+| `err(code, message)`, `err(message)` | Error. Without a code, the code is `0` |
 | `gc_collect()` | Force a garbage collection |
 
 ## Runtime errors
 
-The program stops with a message, the line number and exit code `101`:
+These are panics: the `panic info` handler of an `attempt` catches them, including from called functions (see [local handling](#local-handling-attempt-and--else)). Without a handler, the program stops with a message, the line number and exit code `101`:
 
 ```
 Runtime Error: index 3 out of bounds (len 3) at line 5
@@ -817,6 +909,7 @@ Runtime Error: index 3 out of bounds (len 3) at line 5
 | `array changed during iteration`, `map changed during iteration` | `push`, `pop` or `del` while walking the collection |
 | `result has no value: ...` | Reading `value` from an error |
 | `substr: range is outside the string`, `split: empty delimiter` | Bad arguments to string functions |
+| `strings cannot contain a NUL byte` | `cstr('\0')` or `toString_char('\0')` |
 
 ## Native functions in D
 
@@ -831,6 +924,10 @@ args = ["string", "string"]
 ```
 
 A native function that returns `result<T>` builds it with `resultOk`, `resultErr`, `resultVoidOk` and `resultVoidErr` from `mono/std/core/abi.d`.
+
+For `panic info` to catch a native function's failures, set `panic_context = true` in its entry. The function then takes a final `MsPanicContext*` argument (after the `args`), reports a failure with `ms_raise(message, line, context)` and **returns immediately**. It also passes on failures from its own helpers before using their result. A function without this flag stays a plain C call, and `ms_panic` still exits. Rebuild programs and native libraries after this calling-convention change.
+
+Strings are passed as a C-compatible data pointer, with a `u64` length stored right before the data. A string that a native function returns must come from `newString(length)`, `stringFromBytes(data, length)` or `stringFromCString(text)` in the same module. Do not return a C/D literal or a `malloc` buffer. `resultErr` copies the error message into this format itself. Rebuild native extensions and programs after updating the runtime.
 
 ## Not implemented yet
 

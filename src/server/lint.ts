@@ -3,7 +3,7 @@
 // отступы `|`, метки, незакрытые строки и символы, синтаксис, которого
 // больше нет в языке, и вызовы неизвестных функций.
 
-import { MsDocument, PREFIX_RE, countDepth, opensBlock, visibleSymbols } from '../analyzer';
+import { HANDLER_RE, LineInfo, MsDocument, PREFIX_RE, countDepth, inlineColon, opensBlock, splitTopLevel, tryElse, visibleSymbols } from '../analyzer';
 import { BUILTIN_FUNCTIONS } from '../builtins';
 
 export interface LintDiagnostic {
@@ -70,7 +70,42 @@ export function maskLine(raw: string, inBlockComment: boolean): MaskedLine {
     return { text: out.join(''), unclosedString, chars, endsInBlockComment: inBlockComment };
 }
 
-const VALID_CHAR = /^(?:\\[nrtfb0'"\\]|[\x00-\x7f])$/;
+/**
+ * `attempt` и его обработчики на той же глубине: `else error` (ошибки `?`)
+ * и `panic info` (паники). Нужен хотя бы один, каждый — не больше одного раза.
+ * `panic info` без `attempt` перед ним — ошибка.
+ */
+function lintAttempts(doc: MsDocument, push: (line: number, start: number, end: number, message: string, severity: LintDiagnostic['severity'], code: string) => void) {
+    const lines = doc.lines;
+    const consumed = new Set<number>();
+    const where = (info: LineInfo) => info.prefix.length;
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].blank || lines[i].code !== 'attempt') { continue; }
+        const depth = lines[i].depth;
+        const seen = new Set<string>();
+        for (let j = i + 1; j < lines.length; j++) {
+            const info = lines[j];
+            if (info.blank || info.depth > depth) { continue; }
+            const h = info.depth === depth ? info.code.match(HANDLER_RE) : null;
+            if (!h) { break; }
+            consumed.add(j);
+            if (seen.has(h[1])) {
+                push(j, where(info), where(info) + info.code.length, `Второй обработчик \`${h[1]}\` у одного \`attempt\``, 'error', 'attempt');
+            }
+            seen.add(h[1]);
+        }
+        if (!seen.size) {
+            push(i, where(lines[i]), where(lines[i]) + 7, '`attempt` без обработчика: добавьте `else error` или `panic info` на том же уровне после тела', 'error', 'attempt');
+        }
+    }
+    for (let i = 0; i < lines.length; i++) {
+        const info = lines[i];
+        if (info.blank || consumed.has(i) || !/^panic\s+\w+$/.test(info.code)) { continue; }
+        push(i, where(info), where(info) + info.code.length, '`panic info` пишется сразу после блока `attempt` (или после его `else error`)', 'error', 'attempt');
+    }
+}
+
+const VALID_CHAR =/^(?:\\[nrtfb0'"\\]|[\x00-\x7f])$/;
 
 export function lint(text: string, doc: MsDocument, workspaceNames: Set<string>): LintDiagnostic[] {
     const rawLines = text.split(/\r?\n/);
@@ -135,6 +170,46 @@ export function lint(text: string, doc: MsDocument, workspaceNames: Set<string>)
 
         const line = m.text;
 
+        // Ветка в одну строку: `if x: return 1`, `else: echo("no")`
+        const colon = inlineColon(code);
+        if (colon >= 0) {
+            const body = code.slice(colon + 1).trim();
+            const at = prefix.length + m.text.slice(prefix.length).indexOf(code) + colon;
+            if (body === '') {
+                push(i, at, at + 1, 'После `:` нужна инструкция на той же строке. Для блока уберите `:` и начните тело со следующей строки', 'error', 'inline-if');
+            } else if (/^(?:if|else|while|for|use)\b/.test(body) || /^\[/.test(body)) {
+                push(i, at + 1, raw.length, 'В ветке через `:` — ровно одна простая инструкция. Вложенный `if`, цикл или объявление пишутся блоком с отступом', 'error', 'inline-if');
+            }
+        } else if (/^while\b.*:\s*\S/.test(code) && !/[([{]/.test(code.slice(code.indexOf(':')))) {
+            const at = m.text.indexOf(':', prefix.length);
+            push(i, at, raw.length, 'Ветка через `:` есть только у `if` / `else`. Тело `while` пишется блоком с отступом', 'error', 'inline-if');
+        }
+
+        // Обработка ошибок: `attempt` и `r? else ...`
+        const codeAt = prefix.length + m.text.slice(prefix.length).indexOf(code);
+        if (/^attempt\b\s*\S/.test(code)) {
+            push(i, codeAt + 7, raw.length, 'После `attempt` ничего не пишется: тело — блок с отступом на следующей строке', 'error', 'attempt');
+        }
+        const elseAt = tryElse(code);
+        if (elseAt >= 0) {
+            const after = code.slice(elseAt + 4);
+            const at = codeAt + elseAt;
+            const action = after.match(/^\s*:(.*)$/);
+            if (action) {
+                const statements = splitTopLevel(action[1], ';');
+                const last = statements[statements.length - 1];
+                if (!statements.length) {
+                    push(i, at, at + 5, 'После `? else:` нужна инструкция на той же строке, например `return`', 'error', 'try-else');
+                } else if (statements.some(s => /^\[/.test(s) || /^(?:if|else|while|for|use|attempt|panic)\b/.test(s))) {
+                    push(i, at, raw.length, 'В `? else:` — только простые инструкции через `;`. Для сложной обработки используйте `attempt`', 'error', 'try-else');
+                } else if (!/^(?:return|break|continue)\b/.test(last)) {
+                    push(i, at, raw.length, 'Обработчик `? else:` должен заканчиваться `return`, `break` или `continue`', 'error', 'try-else');
+                }
+            } else if (after.trim() === '') {
+                push(i, at, at + 4, 'После `? else` нужно значение-замена или `:` и инструкции', 'error', 'try-else');
+            }
+        }
+
         // Метки
         for (const lm of line.matchAll(/@(\w+)/g)) {
             const name = lm[1];
@@ -176,5 +251,6 @@ export function lint(text: string, doc: MsDocument, workspaceNames: Set<string>)
     if (prev && opensBlock(prev.code)) {
         push(prev.line, 0, rawLines[prev.line].length, 'Пустой блок: тело должно начинаться на следующей строке с ещё одной `|`', 'warning', 'empty-block');
     }
+    lintAttempts(doc, push);
     return result;
 }

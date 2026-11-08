@@ -4,6 +4,52 @@ All notable changes to the "ms" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.5.0]
+
+Support for the MONOSCRIPT compiler as of commit `8587cfa`: local error handling.
+
+### Added
+- `attempt` blocks with `else error` and `panic info` handlers: highlighting, smart `Enter` and indent checks, hovers, and completion of `error.` (`ok`, `code`, `error`) and `info.` (`message`, `line`) inside the handler. The handler names are visible only inside their block.
+- `r? else value` and `r? else: statements`: `x ^= toInt(s)? else 0` gets the unwrapped type, and `error` is available in a one-line action.
+- Fast checks: `attempt` without a handler or with a duplicate one, `panic info` without an `attempt`, text after `attempt`, `? else` with nothing after it, and a `? else:` action that does not end in `return`, `break` or `continue` or contains a block statement.
+- `attempt` and `orelse` snippets.
+- Reference: *Local handling: attempt and ? else*, panics that `panic info` catches, and `panic_context = true` for native functions.
+
+### Changed
+- Reading `.value` from an error, out-of-bounds access and other runtime errors are described as panics that `panic info` can catch (exit code `101` only when nothing catches them).
+
+## [0.4.0]
+
+Support for the MONOSCRIPT compiler as of commit `fb99678`.
+
+### Added
+- One-line branches `if x: stmt`, `else if x: stmt`, `else: stmt`: no false "empty block" or indent warnings, smart `Enter` does not add a `|` level after them, and the fast checks report `if x:` with nothing after the colon, nested control statements in a one-line branch, and `while x: ...`.
+- Postfix `r?` / `r??`: highlighting, and `x ^= toInt(s)?` gets the unwrapped type in inlay hints and completion.
+- `x ^= split(...)` and other built-in calls now get their return type.
+- Reference: one-line branches, the `?` operator, NUL bytes in strings, the new `@pure` checks, and the native string ABI (`newString`, `stringFromBytes`, `stringFromCString`).
+
+### Changed
+- `toInt(s)` returns `result<i32>` with strict parsing (code `1` for syntax, `2` for range) in hovers, signatures and the reference.
+- `\0` is listed only as a `char` escape: string literals cannot contain a NUL byte.
+
+### Fixed
+- The map example in the reference iterated over an array literal, which the compiler rejects.
+
+## [0.3.1]
+
+### Added
+- `reverse(s)` built-in in completion, hovers, highlighting and the reference.
+- `Ctrl+Shift+F1` opens the reference. The commands are now titled *Open/Search Documentation (Language Reference)*, so they are found by typing "doc" in the Command Palette.
+
+### Changed
+- The reference and hovers say that `err("message")` has code `0`.
+- Reference panel redesign in black and white, after the MONOSCRIPT logo: a **MONO**SCRIPT wordmark, monospace headings, grayscale code highlighting (keywords bold, types italic, strings gray). The page is black in dark themes and white in light themes and no longer picks up theme colors such as harsh borders or black code blocks. High contrast themes get solid borders.
+- In the reference search, `Enter` jumps to the first match and `Esc` clears the query.
+
+### Fixed
+- The contents list scrolled under the search box.
+- Opening the reference at a section (for example from a hover link) could land far below that section.
+
 ## [0.3.0]
 
 ### Added

@@ -55,7 +55,7 @@ const IDENT = '[A-Za-z_][A-Za-z0-9_]*';
 export const TYPE = `${IDENT}(?:<(?:[\\w\\s,]|<(?:[\\w\\s,]|<[\\w\\s,]*>)*>)*>)?`;
 
 const NOT_TYPES = new Set([
-    'if', 'else', 'while', 'for', 'in', 'return', 'break', 'continue', 'and', 'or', 'is',
+    'if', 'else', 'attempt', 'panic', 'while', 'for', 'in', 'return', 'break', 'continue', 'and', 'or', 'is',
     'use', 'const', 'final', 'public', 'private', 'this', 'self', 'defined', 'true', 'false', 'null', 'none'
 ]);
 
@@ -73,12 +73,76 @@ const BLOCK_OPENERS: RegExp[] = [
     /^\[\s*struct\s*\]\s*\w+\s*(?:@\w+\s*)*$/,                     // структура
     /^(?:if|while)\b.*$/,
     /^for\s+\w+\s+in\b.*$/,
-    /^else(?:\s+if\b.*)?$/
+    /^else(?:\s+if\b.*|\s+[A-Za-z_]\w*)?$/,                        // else / else if / обработчик `else error`
+    /^attempt$/,
+    /^panic\s+[A-Za-z_]\w*$/
 ];
+
+/** Обработчик блока `attempt`: `else error` или `panic info`. */
+export const HANDLER_RE = new RegExp(`^(else|panic)\\s+(${IDENT})$`);
+
+/** Тип имени, которое связывает обработчик: ошибка из `result` или снимок паники. */
+export function handlerBindingType(kind: string): string {
+    return kind === 'panic' ? 'panic_info' : 'result<void>';
+}
+
+/**
+ * Позиция слова `else` в `r? else ...` (замена или обработчик в строку) или -1.
+ * Строки, символы и скобки пропускаются.
+ */
+export function tryElse(code: string): number {
+    let depth = 0;
+    for (let i = 0; i < code.length; i++) {
+        const ch = code[i];
+        if (ch === '"' || ch === "'") {
+            for (i++; i < code.length && code[i] !== ch; i++) { if (code[i] === '\\') { i++; } }
+            continue;
+        }
+        if (ch === '/' && code[i + 1] === '/') { return -1; }
+        if ('([{'.includes(ch)) { depth++; }
+        else if (')]}'.includes(ch)) { depth--; }
+        else if (ch === '?' && depth === 0) {
+            const m = code.slice(i).match(/^\?+\s*else\b/);
+            if (m) { return i + m[0].length - 4; }
+        }
+    }
+    return -1;
+}
 
 /** Строка (без префикса `|` и комментария) открывает блок на следующей строке. */
 export function opensBlock(code: string): boolean {
+    if (inlineColon(code) >= 0) { return false; } // `if x: return 1` — ветка в одну строку
     return BLOCK_OPENERS.some(re => re.test(code));
+}
+
+/**
+ * Позиция `:` инлайн-ветки `if cond: stmt`, `else if cond: stmt`, `else: stmt`
+ * или -1. Двоеточия внутри строк, символов и скобок не считаются.
+ */
+export function inlineColon(code: string): number {
+    if (!/^(?:if|else)\b/.test(code)) { return -1; }
+    let depth = 0;
+    for (let i = 0; i < code.length; i++) {
+        const ch = code[i];
+        if (ch === '"' || ch === "'") {
+            for (i++; i < code.length && code[i] !== ch; i++) { if (code[i] === '\\') { i++; } }
+            continue;
+        }
+        if (ch === '/' && code[i + 1] === '/') { return -1; }
+        if ('([{'.includes(ch)) { depth++; }
+        else if (')]}'.includes(ch)) { depth--; }
+        else if (ch === ':' && depth === 0) { return i; }
+    }
+    return -1;
+}
+
+/** `r?`, `r??`: каждый постфиксный `?` разворачивает один `result<T>`. */
+export function unwrapTry(type: string | undefined, count: number): string | undefined {
+    for (let k = 0; k < count && type; k++) {
+        const m = type.match(/^result<(.*)>$/);
+        type = m ? m[1].trim() : undefined;
+    }
+    return type;
 }
 
 export function countDepth(prefix: string): number {
@@ -285,7 +349,7 @@ export function analyze(text: string, external?: (name: string) => string | unde
     const all: MsSymbol[] = [];
     // Стек открытых блочных символов (структуры, функции, методы)
     const stack: MsSymbol[] = [];
-    const pendingCalls: { sym: MsSymbol; callee: string }[] = [];
+    const pendingCalls: { sym: MsSymbol; callee: string; tries: number }[] = [];
     const pendingFors: { sym: MsSymbol; iterable: string }[] = [];
 
     const attach = (sym: MsSymbol) => {
@@ -367,12 +431,35 @@ export function analyze(text: string, external?: (name: string) => string | unde
             continue;
         }
 
+        // `else error` / `panic info` после `attempt`: имя видно только внутри обработчика
+        m = code.match(HANDLER_RE);
+        if (m) {
+            const owner = enclosing(stack, i) ?? stack[stack.length - 1];
+            all.push({
+                ...base, character: col + code.lastIndexOf(m[2]), name: m[2], kind: 'variable',
+                type: handlerBindingType(m[1]), endLine: blockEnd(lines, i, info.depth), parent: owner
+            });
+            continue;
+        }
+        // `r? else: ...` связывает `error` до конца строки
+        const elseAt = tryElse(code);
+        if (elseAt >= 0 && /^else\s*:/.test(code.slice(elseAt))) {
+            const owner = enclosing(stack, i) ?? stack[stack.length - 1];
+            all.push({ ...base, character: col + elseAt, name: 'error', kind: 'variable', type: 'result<void>', endLine: i, parent: owner });
+        }
+
         m = code.match(DYN_VAR_RE);
         if (m) {
             if (m[2] === '_') { continue; } // `_ ^= save()` — результат игнорируется
-            const sym = declareVar(m[2], inferType(m[3]), code.indexOf(m[2]));
-            const callee = sym && !sym.type ? wholeCall(m[3].trim()) : undefined;
-            if (sym && callee) { pendingCalls.push({ sym, callee }); }
+            // `x ^= toInt(s)?` — тип вызова без одного `result<>` на каждый `?`.
+            // `x ^= toInt(s)? else 0` — тот же тип: замена должна ему подходить
+            const fallback = tryElse(m[3]);
+            const rhs = (fallback >= 0 ? m[3].slice(0, fallback) : m[3]).trim();
+            const tries = (rhs.match(/\?+$/) ?? [''])[0].length;
+            const callExpr = rhs.slice(0, rhs.length - tries).trim();
+            const sym = declareVar(m[2], tries ? undefined : inferType(rhs), code.indexOf(m[2]));
+            const callee = sym && !sym.type ? wholeCall(callExpr) : undefined;
+            if (sym && callee) { pendingCalls.push({ sym, callee, tries }); }
             continue;
         }
 
@@ -386,13 +473,14 @@ export function analyze(text: string, external?: (name: string) => string | unde
 
     // Типы, которые известны только после разбора всего файла:
     // `x ^= f()` (функцию можно вызывать до объявления) и переменная цикла `for`
-    for (const { sym, callee } of pendingCalls) {
-        sym.type = returnTypeOf(all, callee) ?? external?.(callee);
+    const callType = (callee: string) => returnTypeOf(all, callee) ?? external?.(callee);
+    for (const { sym, callee, tries } of pendingCalls) {
+        sym.type = unwrapTry(callType(callee), tries);
     }
     for (const { sym, iterable } of pendingFors) {
         if (/^range\s*\(/.test(iterable)) { sym.type = 'i32'; continue; }
         const callee = wholeCall(iterable);
-        if (callee) { sym.type = elementType(returnTypeOf(all, callee) ?? external?.(callee)); continue; }
+        if (callee) { sym.type = elementType(callType(callee)); continue; }
         // items / self.scores / player.inventory.items
         if (/^[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*$/.test(iterable)) {
             sym.type = elementType(typeOfPath(all, iterable.split('.').map(x => x.trim()), sym.line));
@@ -507,7 +595,8 @@ export function visibleSymbols(doc: MsDocument, line: number): MsSymbol[] {
         if (!scopes.has(sym.parent)) { continue; }
         if (sym.kind === 'field' || sym.kind === 'method') { continue; }
         const isLocal = sym.kind === 'variable' || sym.kind === 'parameter';
-        if (isLocal && sym.parent && sym.line > line) { continue; }
+        // Переменная цикла и имя обработчика видны только внутри своего блока
+        if (isLocal && sym.parent && (sym.line > line || sym.endLine < line)) { continue; }
         result.push(sym);
     }
     return result;

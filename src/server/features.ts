@@ -8,7 +8,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import {
     MsDocument, MsSymbol, PREFIX_RE, countDepth, formatParam, methodAt, signatureOf, visibleSymbols
 } from '../analyzer';
-import { BUILTIN_FUNCTIONS, CASTABLE_TYPES, KEYWORDS, LABELS, RESULT_MEMBERS, TYPES, builtinSignature } from '../builtins';
+import { BUILTIN_FUNCTIONS, CASTABLE_TYPES, KEYWORDS, LABELS, PANIC_INFO_MEMBERS, RESULT_MEMBERS, TYPES, builtinSignature } from '../builtins';
 import { guideLink, sectionForWord } from '../guide/sections';
 import { maskLine } from './lint';
 import { IndexedFile, WorkspaceIndex } from './workspace';
@@ -292,7 +292,7 @@ export class Features {
 
     private typeCompletions(doc: MsDocument, line: number): CompletionItem[] {
         const snippetFor: Record<string, string> = { array: 'array<${1:i32}>', map: 'map<${1:string}, ${2:i32}>', result: 'result<${1:i32}>' };
-        const items: CompletionItem[] = Object.entries(TYPES).filter(([t]) => t !== 'struct').map(([t, desc]) => ({
+        const items: CompletionItem[] = Object.entries(TYPES).filter(([t]) => t !== 'struct' && t !== 'panic_info').map(([t, desc]) => ({
             label: t, kind: CompletionItemKind.TypeParameter, documentation: md(desc), sortText: '4' + t,
             ...(snippetFor[t] ? { insertText: snippetFor[t], insertTextFormat: InsertTextFormat.Snippet } : {})
         }));
@@ -339,9 +339,15 @@ export class Features {
 
     private memberCompletions(doc: MsDocument, objName: string, line: number): CompletionItem[] {
         const typeName = this.typeOf(doc, objName, line);
+        if (typeName === 'panic_info') {
+            return PANIC_INFO_MEMBERS.map(m => ({
+                label: m.name, kind: CompletionItemKind.Field, labelDetails: { description: m.type }, documentation: md(m.doc), sortText: '0' + m.name
+            }));
+        }
         const inner = resultInner(typeName);
         if (inner !== undefined) {
-            return RESULT_MEMBERS.map(m => ({
+            // У `result<void>` (в том числе `error` в обработчике) нет значения
+            return RESULT_MEMBERS.filter(m => inner !== 'void' || m.name !== 'value').map(m => ({
                 label: m.name, kind: CompletionItemKind.Field, labelDetails: { description: m.type(inner) }, documentation: md(m.doc), sortText: '0' + m.name
             }));
         }
@@ -370,7 +376,12 @@ export class Features {
             if (owner) { return { contents: md(codeblock(`${owner} self`) + '\n\nТекущий объект внутри метода.' + ref('methods')), range }; }
         }
         const member = before.match(/([A-Za-z_]\w*)\s*\.\s*$/);
-        const inner = member ? resultInner(this.typeOf(doc, member[1], position.line)) : undefined;
+        const memberType = member ? this.typeOf(doc, member[1], position.line) : undefined;
+        const panicMember = memberType === 'panic_info' ? PANIC_INFO_MEMBERS.find(m => m.name === w.word) : undefined;
+        if (member && panicMember) {
+            return { contents: md(codeblock(`${panicMember.type} ${member[1]}.${w.word}`) + '\n\n' + panicMember.doc + ref('handling')), range };
+        }
+        const inner = resultInner(memberType);
         const resultMember = inner !== undefined ? RESULT_MEMBERS.find(m => m.name === w.word) : undefined;
         if (member && resultMember && inner !== undefined) {
             return { contents: md(codeblock(`${resultMember.type(inner)} ${member[1]}.${w.word}`) + '\n\n' + resultMember.doc + ref('result')), range };

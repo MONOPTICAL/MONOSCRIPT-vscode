@@ -7,16 +7,16 @@ Official VS Code extension for the [MONOSCRIPT](https://github.com/MONOPTICAL/MO
 ## Features
 
 ### Language reference inside VS Code
-The reference opens in a panel next to the editor. Open it with the 📖 button in the editor title bar, from the editor context menu, or with `MONOSCRIPT: Open Language Reference`.
+The reference opens in a panel next to the editor. Open it with the 📖 button in the editor title bar, from the editor context menu, with `Ctrl+Shift+F1`, or with `MONOSCRIPT: Open Documentation (Language Reference)`.
 
 * **Contents** sit in a sidebar that highlights the section you are reading. The search box keeps only the sections whose text contains the query.
 * **Examples** are highlighted like MONOSCRIPT code. Hover over one to get two buttons: **Open in editor** creates a new `.ms` file with the example, and **Copy** puts it on the clipboard.
 * **RU / EN** switches the language. The default follows the VS Code interface, and the `monoscript.guide.language` setting overrides it.
 * **📖 Справочник** links at the end of hovers on keywords, types, labels and built-ins open the matching section.
-* **`MONOSCRIPT: Search Language Reference`** jumps to any section by its title.
+* **`MONOSCRIPT: Search Documentation (Language Reference)`** jumps to any section by its title.
 
 ### Editing
-* **Syntax highlighting** for `.ms` files: types (`f64`, `char`, `array<i32>`, `map<string, i32>`, `result<T>`), functions and methods, generic functions (`[T]first<T>(...)`), `func:` parameters, structs, `self`, labels (`@entry`, `@strict`, `@pure`, `@private`, `@overwrite`), `use` imports, casts (`x->i64`), character literals (`'a'`, `'\n'`), the result check (`?r`), and `TODO`/`FIXME` in comments.
+* **Syntax highlighting** for `.ms` files: types (`f64`, `char`, `array<i32>`, `map<string, i32>`, `result<T>`), functions and methods, generic functions (`[T]first<T>(...)`), `func:` parameters, structs, `self`, labels (`@entry`, `@strict`, `@pure`, `@private`, `@overwrite`), `use` imports, casts (`x->i64`), character literals (`'a'`, `'\n'`), the result check (`?r`), error handling (`attempt`, `else error`, `panic info`, `r? else`), and `TODO`/`FIXME` in comments.
 * **Block guides**: the `|` indentation is colored by nesting level (`monoscript.blockGuides`: `rainbow` / `dim` / `off`).
 * **Smart `|` indentation**:
   * `Enter` keeps the current `|` prefix and opens a new level after `[T]func(...)`, `[T]func<T>(...)`, `[struct]Name`, `if`, `else`, `for` and `while`.

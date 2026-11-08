@@ -3,8 +3,8 @@
 
 import { BUILTIN_FUNCTIONS } from '../builtins';
 
-const KEYWORDS = new Set(['if', 'else', 'while', 'for', 'in', 'return', 'break', 'continue', 'and', 'or', 'use', 'const', 'final']);
-const TYPES = new Set(['i1', 'i8', 'i16', 'i32', 'i64', 'float', 'f64', 'char', 'string', 'void', 'auto', 'array', 'map', 'result', 'func', 'struct']);
+const KEYWORDS = new Set(['if', 'else', 'attempt', 'panic', 'while', 'for', 'in', 'return', 'break', 'continue', 'and', 'or', 'use', 'const', 'final']);
+const TYPES = new Set(['i1', 'i8', 'i16', 'i32', 'i64', 'float', 'f64', 'char', 'string', 'void', 'auto', 'array', 'map', 'result', 'func', 'struct', 'panic_info']);
 const CONSTANTS = new Set(['true', 'false', 'null', 'none']);
 const BUILTINS = new Set(BUILTIN_FUNCTIONS.map(f => f.name));
 
